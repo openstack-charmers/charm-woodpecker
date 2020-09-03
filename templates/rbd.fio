@@ -1,0 +1,9 @@
+[global]
+ioengine=rbd
+clientname=ceph-benchmarking
+pool={{ pool_name }}
+rbdname=image01
+rw=randwrite
+bs=4k
+[rbd_iodepth32]
+iodepth=32

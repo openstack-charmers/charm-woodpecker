@@ -1,0 +1,3 @@
+[client.ceph-benchmarking]
+	key = {{ ceph_client.key }}
+

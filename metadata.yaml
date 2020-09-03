@@ -1,0 +1,22 @@
+name: ceph-benchmarking
+summary: Charm for executing ceph benchmark testes
+maintainer: OpenStack Charmers <openstack-charmers@lists.ubuntu.com>
+description: |
+  Charm for executing ceph benchmark testes
+tags:
+  - storage
+  - ceph
+  - openstack
+series:
+  - bionic
+  - focal
+subordinate: false
+min-juju-version: 2.7.6
+requires:
+  ceph-client:
+    interface: ceph-client
+  certificates:
+    interface: tls-certificates
+peers:
+  cluster:
+    interface: ceph-benchmarking-peer
