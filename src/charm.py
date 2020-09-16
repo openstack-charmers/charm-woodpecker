@@ -173,6 +173,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.framework.observe(
             self.on.rados_bench_action,
             self.on_rados_bench_action)
+        self.framework.observe(
+            self.on.rbd_bench_action,
+            self.on_rbd_bench_action)
 
     def on_install(self, event):
         if ch_host.is_container():
@@ -281,6 +284,8 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             event.params.get('pool-name') or
             self.model.config['pool-name'])
         _bench = bench_tools.BenchTools()
+        logging.info(
+            "Running rados bench {}".format(event.params['operation']))
         try:
             _result = _bench.rados_bench(
                 _pool_name,
@@ -288,12 +293,97 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 event.params['operation'],
                 client=self.CLIENT_NAME,
                 switches=event.params.get('switches'))
-            event.set_results({"output": _result})
+            event.set_results({"stdout": _result})
         except subprocess.CalledProcessError as e:
             _msg = ("rados bench failed: {}"
                     .format(e.stderr.decode("UTF-8")))
             logging.error(_msg)
-            event.set_failed({"Stderr": _msg})
+            event.fail(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
+
+    def on_rbd_bench_action(self, event):
+        _bench = bench_tools.BenchTools()
+        _pool_name = (
+            event.params.get('pool-name') or
+            self.model.config['pool-name'])
+
+        # Create the image
+        logging.info("Create the rbd image")
+        try:
+            _result = _bench.rbd_create_image(
+                _pool_name,
+                event.params['image-size'],
+                client=self.CLIENT_NAME)
+            # XXX We actually don't care about this output unless we fail on
+            # subsequent steps
+            event.set_results({"stdout": _result})
+        except subprocess.CalledProcessError as e:
+            if "already exists" in e.stderr.decode("UTF-8"):
+                logging.warning(e.stderr.decode("UTF-8"))
+            else:
+                _msg = ("rbd create image failed: {}"
+                        .format(e.stderr.decode("UTF-8")))
+                logging.error(_msg)
+                event.fail(_msg)
+                event.set_results({
+                    "stderr": _msg,
+                    "code": "1"})
+                raise
+
+        # Map the image
+        logging.info("Map the rbd image")
+        try:
+            _result = _bench.rbd_map_image(
+                _pool_name,
+                client=self.CLIENT_NAME)
+            # XXX We actually don't care about this output unless we fail on
+            # subsequent steps
+            event.set_results({"stdout": _result})
+        except subprocess.CalledProcessError as e:
+            _msg = ("rbd map image failed: {}"
+                    .format(e.stderr.decode("UTF-8")))
+            logging.error(_msg)
+            event.fail(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
+            raise
+
+        # Make and mount fs
+        logging.info("Setup filestem for rbd")
+        try:
+            _bench.make_rbd_fs(_pool_name)
+            _bench.make_rbd_mount()
+            _bench.mount_rbd_mount(_pool_name)
+        except subprocess.CalledProcessError as e:
+            _msg = ("Making or mounting fs failed: {}"
+                    .format(e.stderr.decode("UTF-8")))
+            logging.error(_msg)
+            event.fail(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
+            raise
+
+        # Run bench
+        logging.info("Running rbd bench")
+        try:
+            _result = _bench.rbd_bench(
+                _pool_name,
+                event.params['operation'],
+                client=self.CLIENT_NAME)
+            event.set_results({"stdout": _result})
+        except subprocess.CalledProcessError as e:
+            _msg = ("rbd bench failed: {}"
+                    .format(e.stderr.decode("UTF-8")))
+            logging.error(_msg)
+            event.fail(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
+            raise
 
 
 @ops_openstack.core.charm_class

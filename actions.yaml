@@ -38,4 +38,17 @@ rados-bench:
     switches:
       type: string
       description: "String of further parameter switches. (e.g. '-b 1024' or '--no-cleanup')"
-
+rbd-bench:
+  description: "Run the rados bench performance test"
+  params:
+    pool-name:
+      type: string
+      description: "Name of ceph pool for test. Defaults to config option pool-name"
+    image-size:
+      type: integer
+      default: 1024
+      description: "Name of ceph pool for test. Defaults to config option pool-name"
+    operation:
+      type: string
+      default: write
+      description: "Operation: write, rand, or seq"
