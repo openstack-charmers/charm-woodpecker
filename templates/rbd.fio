@@ -1,9 +1,11 @@
+{% if options.params %}
 [global]
 ioengine=rbd
-clientname=ceph-benchmarking
-pool={{ pool_name }}
-rbdname=image01
-rw=randwrite
-bs=4k
+clientname={{ options.params.client }}
+pool={{ options.params.pool_name }}
+rbdname={{ options.params.rbd_image }}
+rw={{ options.params.operation }}
+bs={{ options.params.block_size }}
 [rbd_iodepth32]
-iodepth=32
+iodepth={{ options.params.iodepth }}
+{% endif %}

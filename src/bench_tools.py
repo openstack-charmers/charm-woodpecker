@@ -11,6 +11,7 @@ class BenchTools():
     RBD_MOUNT = "/mnt/ceph-block-device"
     RBD_IMAGE = "rbdimage01"
     RBD_DEV = "/dev/rbd"
+    RBD_FIO_CONF = "/etc/ceph/rbd.fio"
 
     def rados_bench(
             self, pool_name, seconds, operation, client=None, switches=None):
@@ -61,5 +62,10 @@ class BenchTools():
         if client:
             _cmd += ["-n", client]
         _cmd += ["-p", pool_name]
+        _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)
+        return _output.decode("UTF-8")
+
+    def fio(self):
+        _cmd = ["fio", self.RBD_FIO_CONF]
         _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)
         return _output.decode("UTF-8")

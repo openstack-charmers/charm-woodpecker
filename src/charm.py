@@ -103,6 +103,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         "mon", "allow *",
         "mgr", "allow *"]
     CLIENT_NAME = "client.ceph-benchmarking"
+    RBD_MOUNT = "/mnt/ceph-block-device"
+    RBD_IMAGE = "rbdimage01"
+    RBD_DEV = "/dev/rbd"
 
     REQUIRED_RELATIONS = ['ceph-client']
 
@@ -176,6 +179,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.framework.observe(
             self.on.rbd_bench_action,
             self.on_rbd_bench_action)
+        self.framework.observe(
+            self.on.fio_action,
+            self.on_fio_action)
 
     def on_install(self, event):
         if ch_host.is_container():
@@ -206,6 +212,18 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.render_config(event)
         self.request_ceph_pool(event)
 
+    def get_pool_name(self, event):
+        return (
+            event.params.get('pool-name') or
+            self.model.config['pool-name'])
+
+    def set_action_parameters_on_options(self, event):
+        _action_parameters = {}
+        for k, v in event.params.items():
+            _action_parameters[k.replace("-", "_")] = v
+        _action_parameters["pool_name"] = self.get_pool_name(event)
+        setattr(self.adapters.options, "params", _action_parameters)
+
     def render_config(self, event):
         if not self.ceph_client.pools_available:
             print("Defering setup pools")
@@ -216,6 +234,14 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.CEPH_CONFIG_PATH.mkdir(
             exist_ok=True,
             mode=0o750)
+
+        # If we have action parms add them to options. This will enable
+        # template rendering based on action parameters.
+        try:
+            getattr(event, "params")
+            self.set_action_parameters_on_options(event)
+        except AttributeError:
+            pass
 
         def _render_configs():
             for config_file in self.RESTART_MAP.keys():
@@ -280,15 +306,12 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     # Actions
     def on_rados_bench_action(self, event):
-        _pool_name = (
-            event.params.get('pool-name') or
-            self.model.config['pool-name'])
         _bench = bench_tools.BenchTools()
         logging.info(
             "Running rados bench {}".format(event.params['operation']))
         try:
             _result = _bench.rados_bench(
-                _pool_name,
+                self.get_pool_name(event),
                 event.params['seconds'],
                 event.params['operation'],
                 client=self.CLIENT_NAME,
@@ -303,17 +326,14 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 "stderr": _msg,
                 "code": "1"})
 
-    def on_rbd_bench_action(self, event):
+    def create_map_mount_rbd(self, event):
         _bench = bench_tools.BenchTools()
-        _pool_name = (
-            event.params.get('pool-name') or
-            self.model.config['pool-name'])
 
         # Create the image
         logging.info("Create the rbd image")
         try:
             _result = _bench.rbd_create_image(
-                _pool_name,
+                self.get_pool_name(event),
                 event.params['image-size'],
                 client=self.CLIENT_NAME)
             # XXX We actually don't care about this output unless we fail on
@@ -336,7 +356,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info("Map the rbd image")
         try:
             _result = _bench.rbd_map_image(
-                _pool_name,
+                self.get_pool_name(event),
                 client=self.CLIENT_NAME)
             # XXX We actually don't care about this output unless we fail on
             # subsequent steps
@@ -354,9 +374,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         # Make and mount fs
         logging.info("Setup filestem for rbd")
         try:
-            _bench.make_rbd_fs(_pool_name)
+            _bench.make_rbd_fs(self.get_pool_name(event))
             _bench.make_rbd_mount()
-            _bench.mount_rbd_mount(_pool_name)
+            _bench.mount_rbd_mount(self.get_pool_name(event))
         except subprocess.CalledProcessError as e:
             _msg = ("Making or mounting fs failed: {}"
                     .format(e.stderr.decode("UTF-8")))
@@ -367,11 +387,18 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 "code": "1"})
             raise
 
+    def on_rbd_bench_action(self, event):
+
+        # Prepare the rbd image
+        self.create_map_mount_rbd(event)
+
+        _bench = bench_tools.BenchTools()
+
         # Run bench
         logging.info("Running rbd bench")
         try:
             _result = _bench.rbd_bench(
-                _pool_name,
+                self.get_pool_name(event),
                 event.params['operation'],
                 client=self.CLIENT_NAME)
             event.set_results({"stdout": _result})
@@ -384,6 +411,37 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 "stderr": _msg,
                 "code": "1"})
             raise
+
+    def on_fio_action(self, event):
+
+        # If not disk specified use RBD mount
+        if not event.params.get("disk-dev"):
+            # Prepare the rbd image
+            self.create_map_mount_rbd(event)
+
+            # Add context for the render of rbd.fio
+            event.params["client"] = self.CLIENT_NAME.replace("client.", "")
+            event.params["rbd_image"] = self.RBD_IMAGE
+            event.params["pool_name"] = self.get_pool_name(event)
+
+        # Render rbd.fio
+        self.render_config(event)
+
+        _bench = bench_tools.BenchTools()
+
+        logging.info(
+            "Running fio {}".format(event.params['operation']))
+        try:
+            _result = _bench.fio()
+            event.set_results({"stdout": _result})
+        except subprocess.CalledProcessError as e:
+            _msg = ("fio failed: {}"
+                    .format(e.stderr.decode("UTF-8")))
+            logging.error(_msg)
+            event.fail(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
 
 
 @ops_openstack.core.charm_class
