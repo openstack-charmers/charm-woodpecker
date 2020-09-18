@@ -39,7 +39,7 @@ rados-bench:
       type: string
       description: "String of further parameter switches. (e.g. '-b 1024' or '--no-cleanup')"
 rbd-bench:
-  description: "Run the rados bench performance test"
+  description: "Run the rbd bench performance test"
   params:
     pool-name:
       type: string
@@ -53,7 +53,7 @@ rbd-bench:
       default: write
       description: "Operation: write, rand, or seq"
 fio:
-  description: "Run the rados bench performance test"
+  description: "Run the fio performance test"
   params:
     disk-dev:
       type: string
@@ -78,3 +78,25 @@ fio:
       type: integer
       default: 1024
       description: "Name of ceph pool for test. Defaults to config option pool-name"
+swift-bench:
+  description: "Run the swift bench performance test"
+  params:
+    swift-address:
+      type: string
+      description: "Address to access Swift or Ceph Rados Gateway. IP Address or hostname"
+    concurrency:
+      type: integer
+      default: 64
+      description: "Number of concurrent connections to use"
+    object-size:
+      type: integer
+      default: 4096
+      description: "Size of object to PUT (in bytes)"
+    num-objects:
+      type: integer
+      default: 1000
+      description: "Number of objects to PUT"
+    num-gets:
+      type: integer
+      default: 10000
+      description: "Number of GET operations to permform"

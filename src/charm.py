@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.append('lib')
+sys.path.append("lib")
 
 from ops.framework import (
     StoredState,
@@ -35,16 +35,16 @@ class CephClientAdapter(ops_openstack.adapters.OpenStackOperRelationAdapter):
 
     @property
     def mon_hosts(self):
-        hosts = self.relation.get_relation_data()['mon_hosts']
-        return ' '.join(sorted(hosts))
+        hosts = self.relation.get_relation_data()["mon_hosts"]
+        return " ".join(sorted(hosts))
 
     @property
     def auth_supported(self):
-        return self.relation.get_relation_data()['auth']
+        return self.relation.get_relation_data()["auth"]
 
     @property
     def key(self):
-        return self.relation.get_relation_data()['key']
+        return self.relation.get_relation_data()["key"]
 
 
 class PeerAdapter(ops_openstack.adapters.OpenStackOperRelationAdapter):
@@ -61,13 +61,13 @@ class GatewayClientPeerAdapter(PeerAdapter):
     @property
     def gw_hosts(self):
         hosts = self.relation.peer_addresses
-        return ' '.join(sorted(hosts))
+        return " ".join(sorted(hosts))
 
     @property
     def trusted_ips(self):
         ips = self.allowed_ips
         ips.extend(self.relation.peer_addresses)
-        return ' '.join(sorted(ips))
+        return " ".join(sorted(ips))
 
 
 class TLSCertificatesAdapter(
@@ -88,48 +88,49 @@ class CephBenchmarkingAdapters(
         ops_openstack.adapters.OpenStackRelationAdapters):
 
     relation_adapters = {
-        'ceph-client': CephClientAdapter,
-        'cluster': GatewayClientPeerAdapter,
-        'certificates': TLSCertificatesAdapter,
+        "ceph-client": CephClientAdapter,
+        "cluster": GatewayClientPeerAdapter,
+        "certificates": TLSCertificatesAdapter,
     }
 
 
 class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     state = StoredState()
-    PACKAGES = ['ceph-common', 'fio']
+    PACKAGES = ["ceph-common", "fio", "swift-bench"]
     CEPH_CAPABILITIES = [
         "osd", "allow *",
         "mon", "allow *",
         "mgr", "allow *"]
-    CLIENT_NAME = "client.ceph-benchmarking"
-    RBD_MOUNT = "/mnt/ceph-block-device"
+    CLIENT_NAME = "ceph-benchmarking"
+    CEPH_CLIENT_NAME = "client.{}".format(CLIENT_NAME)
+    SWIFT_USER = "{}:swift".format(CLIENT_NAME)
+
+    RBD_MOUNT = Path("/mnt/ceph-block-device")
     RBD_IMAGE = "rbdimage01"
-    RBD_DEV = "/dev/rbd"
+    RBD_DEV = Path("/dev/rbd")
 
-    REQUIRED_RELATIONS = ['ceph-client']
+    REQUIRED_RELATIONS = ["ceph-client"]
 
-    CEPH_CONFIG_PATH = Path('/etc/ceph')
-    RBD_FIO = CEPH_CONFIG_PATH / 'rbd.fio'
-    CEPH_CONF = CEPH_CONFIG_PATH / 'ceph.conf'
+    CEPH_CONFIG_PATH = Path("/etc/ceph")
+    RBD_FIO_CONF = CEPH_CONFIG_PATH / "rbd.fio"
+    CEPH_CONF = CEPH_CONFIG_PATH / "ceph.conf"
+    SWIFT_BENCH_CONF = Path("/etc/swift/swift-bench.conf")
     BENCHMARK_KEYRING = (
-        CEPH_CONFIG_PATH / 'ceph.client.ceph-benchmarking.keyring')
-    TLS_KEY_PATH = CEPH_CONFIG_PATH / 'ceph-benchmarking.key'
-    TLS_PUB_KEY_PATH = CEPH_CONFIG_PATH / 'ceph-benchmarking-pub.key'
-    TLS_CERT_PATH = CEPH_CONFIG_PATH / 'ceph-benchmarking.crt'
-    TLS_KEY_AND_CERT_PATH = CEPH_CONFIG_PATH / 'ceph-benchmarking.pem'
+        CEPH_CONFIG_PATH / "ceph.client.ceph-benchmarking.keyring")
+    TLS_KEY_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.key"
+    TLS_PUB_KEY_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking-pub.key"
+    TLS_CERT_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.crt"
+    TLS_KEY_AND_CERT_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.pem"
     TLS_CA_CERT_PATH = Path(
-        '/usr/local/share/ca-certificates/vault_ca_cert.crt')
+        "/usr/local/share/ca-certificates/vault_ca_cert.crt")
 
-    # We have no services to restart but using that verbiage to remain
-    # consistent with rendering patterns in other charms.
-    BENCHMARK_SERVICES = []
-    RESTART_MAP = {
-        str(RBD_FIO): BENCHMARK_SERVICES,
-        str(CEPH_CONF): BENCHMARK_SERVICES,
-        str(BENCHMARK_KEYRING): BENCHMARK_SERVICES}
+    # We have no services to restart so using configs_for_rendering.
+    configs_for_rendering = [
+        str(CEPH_CONF),
+        str(BENCHMARK_KEYRING)]
 
-    release = 'default'
+    release = "default"
 
     def __init__(self, framework):
         super().__init__(framework)
@@ -139,13 +140,13 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             enable_tls=False)
         self.ceph_client = ceph_client.CephClientRequires(
             self,
-            'ceph-client')
+            "ceph-client")
         self.peers = interface_ceph_benchmarking_peer.CephBenchmarkingPeers(
             self,
-            'cluster')
+            "cluster")
         self.ca_client = ca_client.CAClient(
             self,
-            'certificates')
+            "certificates")
         self.adapters = CephBenchmarkingAdapters(
             (self.ceph_client, self.peers, self.ca_client),
             self)
@@ -180,6 +181,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             self.on.rbd_bench_action,
             self.on_rbd_bench_action)
         self.framework.observe(
+            self.on.swift_bench_action,
+            self.on_swift_bench_action)
+        self.framework.observe(
             self.on.fio_action,
             self.on_fio_action)
 
@@ -199,14 +203,14 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     def request_ceph_pool(self, event):
         logging.info("Requesting replicated pool")
         self.ceph_client.create_replicated_pool(
-            self.model.config['pool-name'])
+            self.model.config["pool-name"])
         logging.info("Requesting permissions")
         self.ceph_client.request_ceph_permissions(
-            self.CLIENT_NAME,
+            self.CEPH_CLIENT_NAME,
             self.CEPH_CAPABILITIES)
         self.ceph_client.request_osd_settings({
-            'osd heartbeat grace': 20,
-            'osd heartbeat interval': 5})
+            "osd heartbeat grace": 20,
+            "osd heartbeat interval": 5})
 
     def refresh_request(self, event):
         self.render_config(event)
@@ -214,15 +218,22 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     def get_pool_name(self, event):
         return (
-            event.params.get('pool-name') or
-            self.model.config['pool-name'])
+            event.params.get("pool-name") or
+            self.model.config["pool-name"])
 
-    def set_action_parameters_on_options(self, event):
+    def set_action_params(self, event):
         _action_parameters = {}
         for k, v in event.params.items():
             _action_parameters[k.replace("-", "_")] = v
         _action_parameters["pool_name"] = self.get_pool_name(event)
-        setattr(self.adapters.options, "params", _action_parameters)
+        _action_parameters["rbd_image"] = self.RBD_IMAGE
+        _action_parameters["rbd_dev"] = str(self.RBD_DEV)
+        _action_parameters["rbd_mount"] = str(self.RBD_MOUNT)
+        _action_parameters["swift_user"] = self.SWIFT_USER
+        _action_parameters["swift_key"] = self.get_swift_key()
+
+        self.adapters.action_params = _action_parameters
+        self.adapters._relations.add("action_params")
 
     def render_config(self, event):
         if not self.ceph_client.pools_available:
@@ -235,16 +246,8 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             exist_ok=True,
             mode=0o750)
 
-        # If we have action parms add them to options. This will enable
-        # template rendering based on action parameters.
-        try:
-            getattr(event, "params")
-            self.set_action_parameters_on_options(event)
-        except AttributeError:
-            pass
-
         def _render_configs():
-            for config_file in self.RESTART_MAP.keys():
+            for config_file in self.configs_for_rendering:
                 ch_templating.render(
                     os.path.basename(config_file),
                     config_file,
@@ -259,7 +262,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     def on_ca_available(self, event):
         addresses = set()
-        for binding_name in ['public', 'cluster']:
+        for binding_name in ["public", "cluster"]:
             binding = self.model.get_binding(binding_name)
             addresses.add(binding.network.ingress_address)
             addresses.add(binding.network.bind_address)
@@ -282,7 +285,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.TLS_KEY_AND_CERT_PATH.write_bytes(
             self.ca_client.application_certificate.public_bytes(
                 encoding=serialization.Encoding.PEM) +
-            b'\n' +
+            b"\n" +
             self.ca_client.application_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.TraditionalOpenSSL,
@@ -292,7 +295,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             self.ca_client.application_key.public_key().public_bytes(
                 format=serialization.PublicFormat.SubjectPublicKeyInfo,
                 encoding=serialization.Encoding.PEM))
-        subprocess.check_call(['update-ca-certificates'])
+        subprocess.check_call(["update-ca-certificates"])
         self.state.enable_tls = True
         self.render_config(event)
 
@@ -306,16 +309,15 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     # Actions
     def on_rados_bench_action(self, event):
-        _bench = bench_tools.BenchTools()
+        _bench = bench_tools.BenchTools(self)
         logging.info(
-            "Running rados bench {}".format(event.params['operation']))
+            "Running rados bench {}".format(event.params["operation"]))
         try:
             _result = _bench.rados_bench(
                 self.get_pool_name(event),
-                event.params['seconds'],
-                event.params['operation'],
-                client=self.CLIENT_NAME,
-                switches=event.params.get('switches'))
+                event.params["seconds"],
+                event.params["operation"],
+                switches=event.params.get("switches"))
             event.set_results({"stdout": _result})
         except subprocess.CalledProcessError as e:
             _msg = ("rados bench failed: {}"
@@ -327,15 +329,14 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 "code": "1"})
 
     def create_map_mount_rbd(self, event):
-        _bench = bench_tools.BenchTools()
+        _bench = bench_tools.BenchTools(self)
 
         # Create the image
         logging.info("Create the rbd image")
         try:
             _result = _bench.rbd_create_image(
                 self.get_pool_name(event),
-                event.params['image-size'],
-                client=self.CLIENT_NAME)
+                event.params["image-size"])
             # XXX We actually don't care about this output unless we fail on
             # subsequent steps
             event.set_results({"stdout": _result})
@@ -356,8 +357,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info("Map the rbd image")
         try:
             _result = _bench.rbd_map_image(
-                self.get_pool_name(event),
-                client=self.CLIENT_NAME)
+                self.get_pool_name(event))
             # XXX We actually don't care about this output unless we fail on
             # subsequent steps
             event.set_results({"stdout": _result})
@@ -392,18 +392,69 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         # Prepare the rbd image
         self.create_map_mount_rbd(event)
 
-        _bench = bench_tools.BenchTools()
+        _bench = bench_tools.BenchTools(self)
 
         # Run bench
         logging.info("Running rbd bench")
         try:
             _result = _bench.rbd_bench(
                 self.get_pool_name(event),
-                event.params['operation'],
-                client=self.CLIENT_NAME)
+                event.params["operation"])
             event.set_results({"stdout": _result})
         except subprocess.CalledProcessError as e:
             _msg = ("rbd bench failed: {}"
+                    .format(e.stderr.decode("UTF-8")))
+            logging.error(_msg)
+            event.fail(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
+            raise
+
+    def get_swift_key(self):
+        #XXX Need to use leader set and pwgen
+        return "FIXME"
+
+    def on_swift_bench_action(self, event):
+        """
+        swift-bench -c 64 -s 4096 -n 1000 -g 100 ./swift.conf
+        """
+        _bench = bench_tools.BenchTools(self)
+
+        # Add action_parms to adapters
+        self.set_action_params(event)
+        # Add swift-bench.conf for rendering
+        self.configs_for_rendering.append(str(self.SWIFT_BENCH_CONF))
+        # Render swift-bench.conf with action_params
+        #XXX http/https
+        self.render_config(event)
+
+        logging.info("Create radosgw user and key")
+        try:
+            _result = _bench.radosgw_user_create(
+                self.CLIENT_NAME,
+                "swift",
+                self.get_swift_key())
+            # XXX We actually don't care about this output unless we fail on
+            # subsequent steps
+            event.set_results({"stdout": _result})
+        except subprocess.CalledProcessError as e:
+            _msg = ("Rados GW user and key creation failed: {}"
+                    .format(e.stderr.decode("UTF-8")))
+            logging.error(_msg)
+            event.fail(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
+            raise
+
+        # Run bench
+        logging.info("Running swift bench")
+        try:
+            _result = _bench.swift_bench()
+            event.set_results({"stdout": _result})
+        except subprocess.CalledProcessError as e:
+            _msg = ("swift bench failed: {}"
                     .format(e.stderr.decode("UTF-8")))
             logging.error(_msg)
             event.fail(_msg)
@@ -420,17 +471,21 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             self.create_map_mount_rbd(event)
 
             # Add context for the render of rbd.fio
-            event.params["client"] = self.CLIENT_NAME.replace("client.", "")
+            event.params["client"] = self.CLIENT_NAME
             event.params["rbd_image"] = self.RBD_IMAGE
             event.params["pool_name"] = self.get_pool_name(event)
 
+        # Add action_parms to adapters
+        self.set_action_params(event)
+        # Add rbd.fio for rendering
+        self.configs_for_rendering.append(str(self.RBD_FIO_CONF))
         # Render rbd.fio
         self.render_config(event)
 
-        _bench = bench_tools.BenchTools()
+        _bench = bench_tools.BenchTools(self)
 
         logging.info(
-            "Running fio {}".format(event.params['operation']))
+            "Running fio {}".format(event.params["operation"]))
         try:
             _result = _bench.fio()
             event.set_results({"stdout": _result})
@@ -448,15 +503,15 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 class CephBenchmarkingCharmJewel(CephBenchmarkingCharmBase):
 
     state = StoredState()
-    release = 'jewel'
+    release = "jewel"
 
 
 @ops_openstack.core.charm_class
 class CephBenchmarkingCharmOcto(CephBenchmarkingCharmBase):
 
     state = StoredState()
-    release = 'octopus'
+    release = "octopus"
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(ops_openstack.core.get_charm_class_for_release())
