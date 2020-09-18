@@ -1,13 +1,14 @@
-charm_name: ceph-iscsi
+charm_name: ceph-benchmarking
 gate_bundles:
   - focal
 smoke_bundles:
   - focal
-configure:
-  - zaza.openstack.charm_tests.vault.setup.auto_initialize_no_validation
-  - zaza.openstack.charm_tests.ceph.iscsi.setup.basic_guest_setup
+configure: {}
 tests:
-  - zaza.openstack.charm_tests.ceph.iscsi.tests.CephISCSIGatewayTest
+- zaza.openstack.charm_tests.ceph.benchmarking.tests.RadosBenchmarkTests
+- zaza.openstack.charm_tests.ceph.benchmarking.tests.RBDBenchmarkTests
+- zaza.openstack.charm_tests.ceph.benchmarking.tests.FIOBenchmarkTests
+- zaza.openstack.charm_tests.ceph.benchmarking.tests.SwiftBenchmarkTests
 target_deploy_status:
   vault:
     workload-status: blocked

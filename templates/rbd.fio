@@ -1,11 +1,11 @@
-{% if options.params %}
+{% if action_params %}
 [global]
 ioengine=rbd
-clientname={{ options.params.client }}
-pool={{ options.params.pool_name }}
-rbdname={{ options.params.rbd_image }}
-rw={{ options.params.operation }}
-bs={{ options.params.block_size }}
+clientname={{ action_params.client }}
+pool={{ action_params.pool_name }}
+rbdname={{ action_params.rbd_image }}
+rw={{ action_params.operation }}
+bs={{ action_params.block_size }}
 [rbd_iodepth32]
-iodepth={{ options.params.iodepth }}
+iodepth={{ action_params.iodepth }}
 {% endif %}

@@ -1,25 +1,10 @@
 # ops_openstack framework actions
 pause:
   description: |
-    Pause ceph-iscsi services.
-    If the ceph-iscsi deployment is clustered using the hacluster charm, the
-    corresponding hacluster unit on the node must first be paused as well.
-    Not doing so may lead to an interruption of service.
+    Pause services.
 resume:
   description: |
-    Resume ceph-iscsi services.
-    If the ceph-iscsi deployment is clustered using the hacluster charm, the
-    corresponding hacluster unit on the node must be resumed as well.
-add-trusted-ip:
-   description: "Add IP address that is permitted to talk to API"
-   params:
-    ips:
-      type: string
-      default: ''
-      description: "Space seperated list of trusted ips"
-    overwrite:
-      type: boolean
-      default: False
+    Resume services.
 # charm actions
 rados-bench:
   description: "Run the rados bench performance test"
