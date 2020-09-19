@@ -64,7 +64,8 @@ class BenchTools():
 
     def swift_bench(self):
         _cmd = ["swift-bench", str(self.charm_instance.SWIFT_BENCH_CONF)]
-        _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)
+        # For some reason swift-bench sends outpout to stderr
+        _output = subprocess.check_output(_cmd, stderr=subprocess.STDOUT)
         return _output.decode("UTF-8")
 
     def fio(self):

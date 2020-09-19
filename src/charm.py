@@ -454,8 +454,10 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             _result = _bench.swift_bench()
             event.set_results({"stdout": _result})
         except subprocess.CalledProcessError as e:
+            # For some reason swift-bench sends outpout to stderr
+            # So stderr is also on stdout
             _msg = ("swift bench failed: {}"
-                    .format(e.stderr.decode("UTF-8")))
+                    .format(e.stdout.decode("UTF-8")))
             logging.error(_msg)
             event.fail(_msg)
             event.set_results({
