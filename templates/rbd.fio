@@ -6,6 +6,7 @@ pool={{ action_params.pool_name }}
 rbdname={{ action_params.rbd_image }}
 rw={{ action_params.operation }}
 bs={{ action_params.block_size }}
+numjobs={{ action_params.num_jobs }}
 [rbd_iodepth32]
 iodepth={{ action_params.iodepth }}
 {% endif %}
