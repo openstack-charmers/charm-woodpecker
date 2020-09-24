@@ -53,21 +53,15 @@ class PeerAdapter(ops_openstack.adapters.OpenStackOperRelationAdapter):
         super(PeerAdapter, self).__init__(relation)
 
 
-class GatewayClientPeerAdapter(PeerAdapter):
+class CephBenchmarkingPeerAdapter(PeerAdapter):
 
     def __init__(self, relation):
-        super(GatewayClientPeerAdapter, self).__init__(relation)
+        super(CephBenchmarkingPeerAdapter, self).__init__(relation)
 
     @property
-    def gw_hosts(self):
+    def hosts(self):
         hosts = self.relation.peer_addresses
         return " ".join(sorted(hosts))
-
-    @property
-    def trusted_ips(self):
-        ips = self.allowed_ips
-        ips.extend(self.relation.peer_addresses)
-        return " ".join(sorted(ips))
 
 
 class TLSCertificatesAdapter(
@@ -89,7 +83,7 @@ class CephBenchmarkingAdapters(
 
     relation_adapters = {
         "ceph-client": CephClientAdapter,
-        "cluster": GatewayClientPeerAdapter,
+        "peer": CephBenchmarkingPeerAdapter,
         "certificates": TLSCertificatesAdapter,
     }
 
@@ -132,6 +126,8 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     release = "default"
 
+    bindings = ["cluster", "peer", "public"]
+
     def __init__(self, framework):
         super().__init__(framework)
         logging.info("Using {} class".format(self.release))
@@ -143,7 +139,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             "ceph-client")
         self.peers = interface_ceph_benchmarking_peer.CephBenchmarkingPeers(
             self,
-            "cluster")
+            "peer")
         self.ca_client = ca_client.CAClient(
             self,
             "certificates")
@@ -159,9 +155,6 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.framework.observe(
             self.peers.on.has_peers,
             self.on_has_peers)
-        self.framework.observe(
-            self.peers.on.allowed_ips_changed,
-            self.render_config)
         self.framework.observe(
             self.ca_client.on.tls_app_config_ready,
             self.on_tls_app_config_ready)
@@ -262,7 +255,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     def on_ca_available(self, event):
         addresses = set()
-        for binding_name in ["public", "cluster"]:
+        for binding_name in self.bingings:
             binding = self.model.get_binding(binding_name)
             addresses.add(binding.network.ingress_address)
             addresses.add(binding.network.bind_address)

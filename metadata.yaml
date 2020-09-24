@@ -12,11 +12,14 @@ series:
   - focal
 subordinate: false
 min-juju-version: 2.7.6
+extra-bindings:
+  public:  # ceph-mon control
+  cluster: # ceph-osd data
 requires:
   ceph-client:
     interface: ceph-client
   certificates:
     interface: tls-certificates
 peers:
-  cluster:
+  peer:
     interface: ceph-benchmarking-peer

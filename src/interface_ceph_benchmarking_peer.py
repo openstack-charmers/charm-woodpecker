@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import json
 import logging
 import socket
 
@@ -27,7 +26,6 @@ class AllowedIpsChangedEvent(EventBase):
 class CephBenchmarkingPeerEvents(ObjectEvents):
     has_peers = EventSource(HasPeersEvent)
     ready_peers = EventSource(ReadyPeersEvent)
-    allowed_ips_changed = EventSource(AllowedIpsChangedEvent)
 
 
 class CephBenchmarkingPeers(Object):
@@ -35,16 +33,13 @@ class CephBenchmarkingPeers(Object):
     on = CephBenchmarkingPeerEvents()
     state = StoredState()
     PASSWORD_KEY = 'admin_password'
-    READY_KEY = 'gateway_ready'
-    FQDN_KEY = 'gateway_fqdn'
-    ALLOWED_IPS_KEY = 'allowed_ips'
+    READY_KEY = 'ready'
+    FQDN_KEY = 'fqdn'
 
     def __init__(self, charm, relation_name):
         super().__init__(charm, relation_name)
         self.relation_name = relation_name
         self.this_unit = self.framework.model.unit
-        self.state.set_default(
-            allowed_ips=[])
         self.framework.observe(
             charm.on[relation_name].relation_changed,
             self.on_changed)
@@ -54,23 +49,10 @@ class CephBenchmarkingPeers(Object):
         self.on.has_peers.emit()
         if self.ready_peer_details:
             self.on.ready_peers.emit()
-        if self.allowed_ips != self.state.allowed_ips:
-            self.on.allowed_ips_changed.emit()
-        self.state.allowed_ips = self.allowed_ips
 
     def set_admin_password(self, password):
         logging.info("Setting admin password")
         self.peer_rel.data[self.peer_rel.app][self.PASSWORD_KEY] = password
-
-    def set_allowed_ips(self, ips, append=True):
-        logging.info("Setting allowed ips: {}".format(append))
-        trusted_ips = []
-        if append and self.allowed_ips:
-            trusted_ips = self.allowed_ips
-        trusted_ips.extend(ips)
-        trusted_ips = sorted(list(set(trusted_ips)))
-        ip_str = json.dumps(trusted_ips)
-        self.peer_rel.data[self.peer_rel.app][self.ALLOWED_IPS_KEY] = ip_str
 
     def announce_ready(self):
         logging.info("announcing ready")
@@ -115,14 +97,6 @@ class CephBenchmarkingPeers(Object):
         if not self.peer_rel:
             return None
         return self.peer_rel.data[self.peer_rel.app].get(self.PASSWORD_KEY)
-
-    @property
-    def allowed_ips(self):
-        if not self.peer_rel:
-            return None
-        ip_str = self.peer_rel.data[self.peer_rel.app].get(
-            self.ALLOWED_IPS_KEY, '[]')
-        return json.loads(ip_str)
 
     @property
     def peer_addresses(self):
