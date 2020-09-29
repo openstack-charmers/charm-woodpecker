@@ -108,6 +108,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     CEPH_CONFIG_PATH = Path("/etc/ceph")
     RBD_FIO_CONF = CEPH_CONFIG_PATH / "rbd.fio"
+    DISK_FIO_CONF = CEPH_CONFIG_PATH / "disk.fio"
     CEPH_CONF = CEPH_CONFIG_PATH / "ceph.conf"
     SWIFT_BENCH_CONF = Path("/etc/swift/swift-bench.conf")
     BENCHMARK_KEYRING = (
@@ -461,7 +462,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     def on_fio_action(self, event):
 
         # If not disk specified use RBD mount
-        if not event.params.get("disk-dev"):
+        if not event.params.get("disk-devices"):
             # Prepare the rbd image
             self.create_map_mount_rbd(event)
 
@@ -469,12 +470,15 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             event.params["client"] = self.CLIENT_NAME
             event.params["rbd_image"] = self.RBD_IMAGE
             event.params["pool_name"] = self.get_pool_name(event)
+            _fio_conf = str(self.RBD_FIO_CONF)
+        else:
+            event.params["disk_devices"] = event.params["disk-devices"].split()
+            _fio_conf = str(self.DISK_FIO_CONF)
 
         # Add action_parms to adapters
         self.set_action_params(event)
-        # Add rbd.fio for rendering
-        self.configs_for_rendering.append(str(self.RBD_FIO_CONF))
-        # Render rbd.fio
+        # Render fio config file
+        self.configs_for_rendering.append(_fio_conf)
         self.render_config(event)
 
         _bench = bench_tools.BenchTools(self)
@@ -482,7 +486,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info(
             "Running fio {}".format(event.params["operation"]))
         try:
-            _result = _bench.fio()
+            _result = _bench.fio(_fio_conf)
             event.set_results({"stdout": _result})
         except subprocess.CalledProcessError as e:
             _msg = ("fio failed: {}"

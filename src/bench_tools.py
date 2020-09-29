@@ -68,8 +68,8 @@ class BenchTools():
         _output = subprocess.check_output(_cmd, stderr=subprocess.STDOUT)
         return _output.decode("UTF-8")
 
-    def fio(self):
-        _cmd = ["fio", str(self.charm_instance.RBD_FIO_CONF)]
+    def fio(self, fio_conf):
+        _cmd = ["fio", fio_conf]
         _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)
         return _output.decode("UTF-8")
 

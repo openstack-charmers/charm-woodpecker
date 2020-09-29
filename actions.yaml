@@ -66,10 +66,15 @@ swift-bench:
 fio:
   description: "Run the fio performance test"
   params:
-    disk-dev:
+    disk-devces:
       type: string
       description: |
-        If unset, use the charm default rbd device in the ceph pool. If set run fio, agsinst the set disk.
+        If unset, use the charm default rbd device in the ceph pool. If set run fio, against the set disk. Space delimited list of devices.
+    ioengine:
+      type: string
+      default: rbd
+      description: |
+        IO Engine for fio
     pool-name:
       type: string
       description: "If using the default rbd device, name of ceph pool for test. Defaults to config option pool-name"
