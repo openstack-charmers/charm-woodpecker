@@ -18,7 +18,7 @@ rados-bench:
       description: "Number of seconds for rados-bench to run."
     operation:
       type: string
-      default: write
+      default: rand
       description: "Operation: write, rand, or seq"
     switches:
       type: string
@@ -35,7 +35,7 @@ rbd-bench:
       description: "Size of the RBD image."
     operation:
       type: string
-      default: write
+      default: rand
       description: "Operation: write, rand, or seq"
 swift-bench:
   description: "Run the swift bench performance test"
@@ -63,6 +63,8 @@ swift-bench:
       type: integer
       default: 8
       description: "Number of GET operations to permform"
+  required:
+    - swift-address
 fio:
   description: "Run the fio performance test"
   params:
@@ -92,7 +94,7 @@ fio:
       description: "IO Depth"
     operation:
       type: string
-      default: write
+      default: read
       description: "Operation: read, write"
     num-jobs:
       type: integer

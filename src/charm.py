@@ -18,7 +18,7 @@ import charmhelpers.core.host as ch_host
 import charmhelpers.core.templating as ch_templating
 import interface_ceph_client.ceph_client as ceph_client
 import interface_tls_certificates.ca_client as ca_client
-import interface_ceph_benchmarking_peer
+import interface_ceph_benchmarking_peers
 
 import bench_tools
 
@@ -60,7 +60,7 @@ class CephBenchmarkingPeerAdapter(PeerAdapter):
 
     @property
     def hosts(self):
-        hosts = self.relation.peer_addresses
+        hosts = self.relation.peers_addresses
         return " ".join(sorted(hosts))
 
 
@@ -83,7 +83,7 @@ class CephBenchmarkingAdapters(
 
     relation_adapters = {
         "ceph-client": CephClientAdapter,
-        "peer": CephBenchmarkingPeerAdapter,
+        "peers": CephBenchmarkingPeerAdapter,
         "certificates": TLSCertificatesAdapter,
     }
 
@@ -119,15 +119,13 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     TLS_KEY_AND_CERT_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.pem"
     TLS_CA_CERT_PATH = Path(
         "/usr/local/share/ca-certificates/vault_ca_cert.crt")
-
     # We have no services to restart so using configs_for_rendering.
     configs_for_rendering = [
         str(CEPH_CONF),
         str(BENCHMARK_KEYRING)]
-
     release = "default"
-
-    bindings = ["cluster", "peer", "public"]
+    bindings = ["cluster", "peers", "public"]
+    action_output_key = "test-results"
 
     def __init__(self, framework):
         super().__init__(framework)
@@ -138,9 +136,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.ceph_client = ceph_client.CephClientRequires(
             self,
             "ceph-client")
-        self.peers = interface_ceph_benchmarking_peer.CephBenchmarkingPeers(
+        self.peers = interface_ceph_benchmarking_peers.CephBenchmarkingPeers(
             self,
-            "peer")
+            "peers")
         self.ca_client = ca_client.CAClient(
             self,
             "certificates")
@@ -249,7 +247,6 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info("Rendering config")
         _render_configs()
         logging.info("Setting started state")
-        self.peers.announce_ready()
         self.state.is_started = True
         self.update_status()
         logging.info("on_pools_available: status updated")
@@ -312,7 +309,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 event.params["seconds"],
                 event.params["operation"],
                 switches=event.params.get("switches"))
-            event.set_results({"stdout": _result})
+            event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             _msg = ("rados bench failed: {}"
                     .format(e.stderr.decode("UTF-8")))
@@ -333,7 +330,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 event.params["image-size"])
             # XXX We actually don't care about this output unless we fail on
             # subsequent steps
-            event.set_results({"stdout": _result})
+            event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             if "already exists" in e.stderr.decode("UTF-8"):
                 logging.warning(e.stderr.decode("UTF-8"))
@@ -354,7 +351,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 self.get_pool_name(event))
             # XXX We actually don't care about this output unless we fail on
             # subsequent steps
-            event.set_results({"stdout": _result})
+            event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             _msg = ("rbd map image failed: {}"
                     .format(e.stderr.decode("UTF-8")))
@@ -394,7 +391,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             _result = _bench.rbd_bench(
                 self.get_pool_name(event),
                 event.params["operation"])
-            event.set_results({"stdout": _result})
+            event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             _msg = ("rbd bench failed: {}"
                     .format(e.stderr.decode("UTF-8")))
@@ -406,8 +403,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             raise
 
     def get_swift_key(self):
-        #XXX Need to use leader set and pwgen
-        return "FIXME"
+        if not self.peers.swift_key:
+            self.peers.set_swift_key(ch_host.pwgen())
+        return self.peers.swift_key
 
     def on_swift_bench_action(self, event):
         """
@@ -420,33 +418,34 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         # Add swift-bench.conf for rendering
         self.configs_for_rendering.append(str(self.SWIFT_BENCH_CONF))
         # Render swift-bench.conf with action_params
-        #XXX http/https
         self.render_config(event)
 
         logging.info("Create radosgw user and key")
-        try:
-            _result = _bench.radosgw_user_create(
-                self.CLIENT_NAME,
-                "swift",
-                self.get_swift_key())
-            # XXX We actually don't care about this output unless we fail on
-            # subsequent steps
-            event.set_results({"stdout": _result})
-        except subprocess.CalledProcessError as e:
-            _msg = ("Rados GW user and key creation failed: {}"
-                    .format(e.stderr.decode("UTF-8")))
-            logging.error(_msg)
-            event.fail(_msg)
-            event.set_results({
-                "stderr": _msg,
-                "code": "1"})
-            raise
+        if not self.peers.swift_user_created:
+            try:
+                _result = _bench.radosgw_user_create(
+                    self.CLIENT_NAME,
+                    "swift",
+                    self.get_swift_key())
+                # XXX We actually don't care about this output unless we fail
+                # on subsequent steps
+                event.set_results({self.action_output_key: _result})
+            except subprocess.CalledProcessError as e:
+                _msg = ("Rados GW user and key creation failed: {}"
+                        .format(e.stderr.decode("UTF-8")))
+                logging.error(_msg)
+                event.fail(_msg)
+                event.set_results({
+                    "stderr": _msg,
+                    "code": "1"})
+                raise
+            self.peers.set_swift_user_created(self.SWIFT_USER)
 
         # Run bench
         logging.info("Running swift bench")
         try:
             _result = _bench.swift_bench()
-            event.set_results({"stdout": _result})
+            event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             # For some reason swift-bench sends outpout to stderr
             # So stderr is also on stdout
@@ -487,7 +486,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             "Running fio {}".format(event.params["operation"]))
         try:
             _result = _bench.fio(_fio_conf)
-            event.set_results({"stdout": _result})
+            event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             _msg = ("fio failed: {}"
                     .format(e.stderr.decode("UTF-8")))
