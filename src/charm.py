@@ -129,8 +129,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     def __init__(self, framework):
         super().__init__(framework)
+        super().register_status_check(self.custom_status_check)
         logging.info("Using {} class".format(self.release))
-        self.state.set_default(
+        self._stored.set_default(
             target_created=False,
             enable_tls=False)
         self.ceph_client = ceph_client.CephClientRequires(
@@ -247,7 +248,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info("Rendering config")
         _render_configs()
         logging.info("Setting started state")
-        self.state.is_started = True
+        self._stored.is_started = True
         self.update_status()
         logging.info("on_pools_available: status updated")
 
@@ -287,16 +288,15 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 format=serialization.PublicFormat.SubjectPublicKeyInfo,
                 encoding=serialization.Encoding.PEM))
         subprocess.check_call(["update-ca-certificates"])
-        self.state.enable_tls = True
+        self._stored.enable_tls = True
         self.render_config(event)
 
     def custom_status_check(self):
         if ch_host.is_container():
-            self.unit.status = ops.model.BlockedStatus(
+            return ops.model.BlockedStatus(
                 "Some charm actions cannot be performed when deployed in a "
                 "container")
-            return False
-        return True
+        return ops.model.ActiveStatus()
 
     # Actions
     def on_rados_bench_action(self, event):
