@@ -11,6 +11,7 @@ from ops.framework import (
 
 
 class HasPeersEvent(EventBase):
+    """Has Peers Event."""
     pass
 
 
@@ -39,6 +40,16 @@ class CephBenchmarkingPeers(Object):
             self.on_changed)
 
     def on_changed(self, event):
+        """On changed.
+
+        Set context from action parameters for rendering files.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
+
         logging.info("CephBenchmarkingPeers on_changed")
         self.on.has_peers.emit()
         if self.ready_peer_details:

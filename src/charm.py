@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class CephClientAdapter(ops_openstack.adapters.OpenStackOperRelationAdapter):
+    """Ceph Client Adapter."""
 
     def __init__(self, relation):
         super(CephClientAdapter, self).__init__(relation)
@@ -48,24 +49,28 @@ class CephClientAdapter(ops_openstack.adapters.OpenStackOperRelationAdapter):
 
 
 class PeerAdapter(ops_openstack.adapters.OpenStackOperRelationAdapter):
+    """Peer Adapter."""
 
     def __init__(self, relation):
         super(PeerAdapter, self).__init__(relation)
 
 
 class CephBenchmarkingPeerAdapter(PeerAdapter):
+    """Ceph Benchmarking Peer Adapter."""
 
     def __init__(self, relation):
         super(CephBenchmarkingPeerAdapter, self).__init__(relation)
 
     @property
     def hosts(self):
+        """Ceph-benchmarking unit addresses."""
         hosts = self.relation.peers_addresses
         return " ".join(sorted(hosts))
 
 
 class TLSCertificatesAdapter(
         ops_openstack.adapters.OpenStackOperRelationAdapter):
+    """TLS Certificates Adapter."""
 
     def __init__(self, relation):
         super(TLSCertificatesAdapter, self).__init__(relation)
@@ -80,6 +85,7 @@ class TLSCertificatesAdapter(
 
 class CephBenchmarkingAdapters(
         ops_openstack.adapters.OpenStackRelationAdapters):
+    """Ceph Benchmarking Adapters."""
 
     relation_adapters = {
         "ceph-client": CephClientAdapter,
@@ -89,6 +95,7 @@ class CephBenchmarkingAdapters(
 
 
 class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
+    """Ceph Benchmarking Charm Base."""
 
     state = StoredState()
     PACKAGES = ["ceph-common", "fio", "swift-bench"]
@@ -128,6 +135,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     action_output_key = "test-results"
 
     def __init__(self, framework):
+        """Init Ceph Benchmarking Charm Base."""
         super().__init__(framework)
         super().register_status_check(self.custom_status_check)
         logging.info("Using {} class".format(self.release))
@@ -181,6 +189,13 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             self.on_fio_action)
 
     def on_install(self, event):
+        """Event handler on install.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
         if ch_host.is_container():
             logging.info("Installing into a container is not supported")
             self.update_status()
@@ -188,12 +203,26 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             self.install_pkgs()
 
     def on_has_peers(self, event):
-        # TODO: We may or may not have tasks as we go to multiple units
-        # multiple units would allow for simultaneous stress tests against ceph
+        """Event handler on has peers.
+
+        Currently a noop. Multiple units will allow for simultaneous stress
+        tests against ceph.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
         logging.info("Unit has peers")
-        pass
 
     def request_ceph_pool(self, event):
+        """Request pool from ceph cluster.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
         logging.info("Requesting replicated pool")
         self.ceph_client.create_replicated_pool(
             self.model.config["pool-name"])
@@ -206,16 +235,42 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             "osd heartbeat interval": 5})
 
     def refresh_request(self, event):
+        """Refresh request for pool from ceph cluster.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
         self.render_config(event)
         self.request_ceph_pool(event)
 
     def get_pool_name(self, event):
+        """Get pool name.
+
+        Return either the action parameter or the configuration option pool
+        name setting.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: pool name
+        :rtype: string
+        """
         return (
             event.params.get("pool-name") or
             self.model.config["pool-name"])
 
     def set_action_params(self, event):
-        _action_parameters = {}
+        """Set action parameters.
+
+        Set context from action parameters for rendering files.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
+        _action_parameters = {"protocol": "http"}
         for k, v in event.params.items():
             _action_parameters[k.replace("-", "_")] = v
         _action_parameters["pool_name"] = self.get_pool_name(event)
@@ -224,11 +279,21 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         _action_parameters["rbd_mount"] = str(self.RBD_MOUNT)
         _action_parameters["swift_user"] = self.SWIFT_USER
         _action_parameters["swift_key"] = self.get_swift_key()
-
+        if self.state.enable_tls:
+            _action_parameters["protocol"] = "https"
         self.adapters.action_params = _action_parameters
         self.adapters._relations.add("action_params")
 
     def render_config(self, event):
+        """Render configuration files.
+
+        Render self.configs_for_rendering.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
         if not self.ceph_client.pools_available:
             print("Defering setup pools")
             logging.info("Defering setup")
@@ -253,6 +318,13 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info("on_pools_available: status updated")
 
     def on_ca_available(self, event):
+        """Event handler on Certificate Authority available.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
         addresses = set()
         for binding_name in self.bingings:
             binding = self.model.get_binding(binding_name)
@@ -263,6 +335,13 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.ca_client.request_application_certificate(socket.getfqdn(), sans)
 
     def on_tls_app_config_ready(self, event):
+        """Event handler on TLS application configuration ready.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
         self.TLS_KEY_PATH.write_bytes(
             self.ca_client.application_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
@@ -292,6 +371,13 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.render_config(event)
 
     def custom_status_check(self):
+        """Custom status check.
+
+        Inform the operator if the charm has been deployed in a container.
+
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
         if ch_host.is_container():
             return ops.model.BlockedStatus(
                 "Some charm actions cannot be performed when deployed in a "
@@ -300,6 +386,16 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     # Actions
     def on_rados_bench_action(self, event):
+        """Event handler on RADOS bench action.
+
+        Run the rados-bench test.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effect of setting event
+                  results.
+        :rtype: None
+        """
         _bench = bench_tools.BenchTools(self)
         logging.info(
             "Running rados bench {}".format(event.params["operation"]))
@@ -320,6 +416,15 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 "code": "1"})
 
     def create_map_mount_rbd(self, event):
+        """Create map and mount rbd block device.
+
+        Create RBD image. Map RBD Image. Prepare and mount RBD block device.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects.
+        :rtype: None
+        """
         _bench = bench_tools.BenchTools(self)
 
         # Create the image
@@ -379,7 +484,16 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             raise
 
     def on_rbd_bench_action(self, event):
+        """Event handler on RBD bench action.
 
+        Run the rbd-bench test.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effect of setting event
+                  results.
+        :rtype: None
+        """
         # Prepare the rbd image
         self.create_map_mount_rbd(event)
 
@@ -403,13 +517,27 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             raise
 
     def get_swift_key(self):
+        """Get Swift Key.
+
+        Generate or get existing swift key
+
+        :returns: Key for authenticating against swift
+        :rtype: String
+        """
         if not self.peers.swift_key:
             self.peers.set_swift_key(ch_host.pwgen())
         return self.peers.swift_key
 
     def on_swift_bench_action(self, event):
-        """
-        swift-bench -c 64 -s 4096 -n 1000 -g 100 ./swift.conf
+        """Event handler on Swift bench action.
+
+        Run the swift-bench test.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effect of setting event
+                  results.
+        :rtype: None
         """
         _bench = bench_tools.BenchTools(self)
 
@@ -459,7 +587,16 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             raise
 
     def on_fio_action(self, event):
+        """Event handler on FIO action.
 
+        Run the FIO test.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effect of setting event
+                  results.
+        :rtype: None
+        """
         # If not disk specified use RBD mount
         if not event.params.get("disk-devices"):
             # Prepare the rbd image
@@ -499,6 +636,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
 @ops_openstack.core.charm_class
 class CephBenchmarkingCharmJewel(CephBenchmarkingCharmBase):
+    """Ceph Benchmarking Charm at Jewel."""
 
     state = StoredState()
     release = "jewel"
@@ -506,10 +644,12 @@ class CephBenchmarkingCharmJewel(CephBenchmarkingCharmBase):
 
 @ops_openstack.core.charm_class
 class CephBenchmarkingCharmOcto(CephBenchmarkingCharmBase):
+    """Ceph Benchmarking Charm at Octopus."""
 
     state = StoredState()
     release = "octopus"
 
 
 if __name__ == "__main__":
+    """Main."""
     main(ops_openstack.core.get_charm_class_for_release())
