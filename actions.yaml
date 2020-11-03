@@ -6,6 +6,17 @@ resume:
   description: |
     Resume services.
 # charm actions
+#
+rbd-map-image:
+  description: "Run rbd map image."
+  params:
+    pool-name:
+      type: string
+      description: "Name of ceph pool for test. Defaults to config option pool-name"
+    image-size:
+      type: integer
+      default: 1024
+      description: "Size of the RBD image."
 rados-bench:
   description: "Run the rados bench performance test"
   params:

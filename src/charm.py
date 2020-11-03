@@ -187,6 +187,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.framework.observe(
             self.on.fio_action,
             self.on_fio_action)
+        self.framework.observe(
+            self.on.rbd_map_image_action,
+            self.on_rbd_map_image_action)
 
     def on_install(self, event):
         """Event handler on install.
@@ -197,10 +200,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         :rtype: None
         """
         if ch_host.is_container():
-            logging.info("Installing into a container is not supported")
-            self.update_status()
-        else:
-            self.install_pkgs()
+            logging.warning("Some charm actions cannot be performed while "
+                            "deployed in a container.")
+        self.install_pkgs()
 
     def on_has_peers(self, event):
         """Event handler on has peers.
@@ -379,12 +381,28 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         :rtype: None
         """
         if ch_host.is_container():
-            return ops.model.BlockedStatus(
+            return ops.model.ActiveStatus(
                 "Some charm actions cannot be performed when deployed in a "
                 "container")
-        return ops.model.ActiveStatus()
+        else:
+            return ops.model.ActiveStatus()
 
     # Actions
+    def on_rbd_map_image_action(self, event):
+        """Event handler on rbd map image action.
+
+        Create and map rbd image
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effect of setting event
+                  results.
+        :rtype: None
+        """
+        # Prepare the rbd image
+        self.rbd_create_image(event)
+        self.rbd_map_image(event)
+
     def on_rados_bench_action(self, event):
         """Event handler on RADOS bench action.
 
@@ -415,7 +433,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 "stderr": _msg,
                 "code": "1"})
 
-    def create_map_mount_rbd(self, event):
+    def rbd_create_image(self, event):
         """Create map and mount rbd block device.
 
         Create RBD image. Map RBD Image. Prepare and mount RBD block device.
@@ -449,8 +467,20 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                     "code": "1"})
                 raise
 
+    def rbd_map_image(self, event):
+        """Create map and mount rbd block device.
+
+        Create RBD image. Map RBD Image. Prepare and mount RBD block device.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects.
+        :rtype: None
+        """
+        _bench = bench_tools.BenchTools(self)
+
         # Map the image
-        logging.info("Map the rbd image")
+        logging.info("rbd map image")
         try:
             _result = _bench.rbd_map_image(
                 self.get_pool_name(event))
@@ -466,6 +496,18 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 "stderr": _msg,
                 "code": "1"})
             raise
+
+    def mount_rbd(self, event):
+        """Mount rbd block device.
+
+        Create RBD image. Map RBD Image. Prepare and mount RBD block device.
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects.
+        :rtype: None
+        """
+        _bench = bench_tools.BenchTools(self)
 
         # Make and mount fs
         logging.info("Setup filestem for rbd")
@@ -495,7 +537,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         :rtype: None
         """
         # Prepare the rbd image
-        self.create_map_mount_rbd(event)
+        self.rbd_create_image(event)
+        self.rbd_map_image(event)
+        self.mount_rbd(event)
 
         _bench = bench_tools.BenchTools(self)
 
@@ -600,7 +644,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         # If not disk specified use RBD mount
         if not event.params.get("disk-devices"):
             # Prepare the rbd image
-            self.create_map_mount_rbd(event)
+            self.rbd_create_image(event)
+            if not ch_host.is_container():
+                self.rbd_map_image(event)
 
             # Add context for the render of rbd.fio
             event.params["client"] = self.CLIENT_NAME
