@@ -279,7 +279,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         _action_parameters["rbd_mount"] = str(self.RBD_MOUNT)
         _action_parameters["swift_user"] = self.SWIFT_USER
         _action_parameters["swift_key"] = self.get_swift_key()
-        if self.state.enable_tls:
+        if self._stored.enable_tls:
             _action_parameters["protocol"] = "https"
         self.adapters.action_params = _action_parameters
         self.adapters._relations.add("action_params")
