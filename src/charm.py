@@ -569,7 +569,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         :rtype: String
         """
         if not self.peers.swift_key:
-            self.peers.set_swift_key(ch_host.pwgen())
+            # If the leader create and set the swift key
+            if self.unit.is_leader():
+                self.peers.set_swift_key(ch_host.pwgen())
         return self.peers.swift_key
 
     def on_swift_bench_action(self, event):
@@ -584,6 +586,12 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         :rtype: None
         """
         _bench = bench_tools.BenchTools(self)
+
+        if not self.get_swift_key():
+            _msg = ("Unable to set sift key. Please run the action on the "
+                    "leader.")
+            event.fail(_msg)
+            raise Exception(_msg)
 
         # Add action_parms to adapters
         self.set_action_params(event)
