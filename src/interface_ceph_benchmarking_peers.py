@@ -11,6 +11,7 @@ from ops.framework import (
 
 
 class HasPeersEvent(EventBase):
+    """Has Peers Event."""
     pass
 
 
