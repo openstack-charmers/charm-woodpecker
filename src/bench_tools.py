@@ -69,7 +69,7 @@ class BenchTools():
         return _output.decode("UTF-8")
 
     def fio(self, fio_conf):
-        _cmd = ["fio", fio_conf]
+        _cmd = ["fio", "--output-format=json", fio_conf]
         _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)
         return _output.decode("UTF-8")
 

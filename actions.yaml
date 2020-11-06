@@ -111,3 +111,7 @@ fio:
       type: integer
       default: 8
       description: "Number of GET operations to permform"
+    runtime:
+      type: integer
+      default: 60
+      description: "Limit the duration of the test"
