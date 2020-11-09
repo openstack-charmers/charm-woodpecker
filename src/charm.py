@@ -169,7 +169,8 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info("Using {} class".format(self.release))
         self._stored.set_default(
             target_created=False,
-            enable_tls=False)
+            enable_tls=False,
+            swift_key=None)
         self.ceph_client = ceph_client.CephClientRequires(
             self,
             "ceph-client")
@@ -607,10 +608,11 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         :returns: Key for authenticating against swift
         :rtype: String
         """
-        if not self.peers.swift_key:
+        if not self.peers.swift_key and self.unit.is_leader():
             # If the leader create and set the swift key
-            if self.unit.is_leader():
-                self.peers.set_swift_key(ch_host.pwgen())
+            _swift_key = self._stored.swift_key or ch_host.pwgen()
+            self._stored.swift_key = _swift_key
+            self.peers.set_swift_key(_swift_key)
         return self.peers.swift_key
 
     def on_swift_bench_action(self, event):
