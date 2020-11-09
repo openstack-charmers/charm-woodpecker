@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import hashlib
 import socket
 import logging
 import os
@@ -108,7 +109,14 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     SWIFT_USER = "{}:swift".format(CLIENT_NAME)
 
     RBD_MOUNT = Path("/mnt/ceph-block-device")
-    RBD_IMAGE = "rbdimage01"
+
+    @property
+    def RBD_IMAGE(self):
+        hash = hashlib.sha1(
+            self.model.unit.name.encode("UTF-8")
+        ).hexdigest()
+        return hash[:10]
+
     RBD_DEV = Path("/dev/rbd")
 
     REQUIRED_RELATIONS = ["ceph-client"]
