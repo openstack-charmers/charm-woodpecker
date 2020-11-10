@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import hashlib
+import json
 import socket
 import logging
 import os
@@ -21,6 +23,8 @@ import interface_tls_certificates.ca_client as ca_client
 import interface_ceph_benchmarking_peers
 
 import bench_tools
+
+from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 
 import ops_openstack.adapters
 import ops_openstack.core
@@ -108,7 +112,14 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     SWIFT_USER = "{}:swift".format(CLIENT_NAME)
 
     RBD_MOUNT = Path("/mnt/ceph-block-device")
-    RBD_IMAGE = "rbdimage01"
+
+    @property
+    def RBD_IMAGE(self):
+        hash = hashlib.sha1(
+            self.model.unit.name.encode("UTF-8")
+        ).hexdigest()
+        return hash[:10]
+
     RBD_DEV = Path("/dev/rbd")
 
     REQUIRED_RELATIONS = ["ceph-client"]
@@ -386,6 +397,17 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 "container")
         else:
             return ops.model.ActiveStatus()
+
+    def add_benchmark_metric(self, registry, label, description, value):
+        """
+        labels:
+            fio_{read|write}_{iops,bandwidth,latency}
+            rbd_bench_{read|write}_??
+            rados_bench_{read|write}_??
+        """
+        metric_gauge = Gauge(label, description,
+                             ['unit'], registry=registry)
+        metric_gauge.labels(self.unit.name).set(value)
 
     # Actions
     def on_rbd_map_image_action(self, event):
@@ -676,7 +698,37 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info(
             "Running fio {}".format(event.params["operation"]))
         try:
-            _result = _bench.fio(_fio_conf)
+            _result = json.loads(_bench.fio(_fio_conf))
+            push_gateway = self.model.config.get("push-gateway")
+            if push_gateway:
+                registry = CollectorRegistry()
+                for job in _result["jobs"]:
+                    for metric in ('read', 'write'):
+                        bandwidth = job[metric]["bw"]
+                        iops = job[metric]["iops"]
+                        latency = job[metric]["lat_ns"]["mean"]
+                        if all((bandwidth, iops, latency)):
+                            self.add_benchmark_metric(
+                                registry,
+                                'fio_{}_bandwidth'.format(metric),
+                                'FIO {} bandwidth (B/s)'.format(metric),
+                                bandwidth
+                            )
+                            self.add_benchmark_metric(
+                                registry,
+                                'fio_{}_iops'.format(metric),
+                                'FIO {} IOPS'.format(metric),
+                                iops
+                            )
+                            self.add_benchmark_metric(
+                                registry,
+                                'fio_{}_latency'.format(metric),
+                                'FIO {} latency (ns)'.format(metric),
+                                latency
+                            )
+                push_to_gateway(push_gateway,
+                                job='ceph-benchmarking-fio',
+                                registry=registry)
             event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             _msg = ("fio failed: {}"

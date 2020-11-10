@@ -31,3 +31,8 @@ options:
     default: ceph-benchmarking
     description: |
       Ceph pool name for tests to use.
+  push-gateway:
+    type: string
+    default:
+    description: |
+      IP address of Prometheus Push Gateway
