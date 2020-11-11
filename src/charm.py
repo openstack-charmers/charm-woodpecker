@@ -122,7 +122,11 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     RBD_DEV = Path("/dev/rbd")
 
-    REQUIRED_RELATIONS = ["ceph-client"]
+    @property
+    def REQUIRED_RELATIONS(self):
+        if not self.model.storages.get('test-devices'):
+            return ["ceph-client"]
+        return []
 
     CEPH_CONFIG_PATH = Path("/etc/ceph")
     RBD_FIO_CONF = CEPH_CONFIG_PATH / "rbd.fio"
