@@ -692,9 +692,11 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             event.params["client"] = self.CLIENT_NAME
             event.params["rbd_image"] = self.RBD_IMAGE
             event.params["pool_name"] = self.get_pool_name(event)
+            event.params["ioengine"] = 'rbd'
             _fio_conf = str(self.RBD_FIO_CONF)
         else:
             event.params["disk_devices"] = event.params["disk-devices"].split()
+            event.params["ioengine"] = 'libaio'
             _fio_conf = str(self.DISK_FIO_CONF)
 
         # Add action_parms to adapters
