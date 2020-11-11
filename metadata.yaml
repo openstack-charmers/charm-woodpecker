@@ -23,3 +23,8 @@ requires:
 peers:
   peers:
     interface: ceph-benchmarking-peer
+storage:
+  test-devices:
+    type: block
+    multiple:
+      range: 0-
