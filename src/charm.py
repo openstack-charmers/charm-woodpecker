@@ -107,9 +107,18 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         "osd", "allow *",
         "mon", "allow *",
         "mgr", "allow *"]
-    CLIENT_NAME = "ceph-benchmarking"
-    CEPH_CLIENT_NAME = "client.{}".format(CLIENT_NAME)
-    SWIFT_USER = "{}:swift".format(CLIENT_NAME)
+
+    @property
+    def CLIENT_NAME(self):
+        return self.model.app.name
+
+    @property
+    def CEPH_CLIENT_NAME(self):
+        return "client.{}".format(self.CLIENT_NAME)
+
+    @property
+    def SWIFT_USER(self):
+        return "{}:swift".format(self.CLIENT_NAME)
 
     RBD_MOUNT = Path("/mnt/ceph-block-device")
 
@@ -133,8 +142,14 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     DISK_FIO_CONF = CEPH_CONFIG_PATH / "disk.fio"
     CEPH_CONF = CEPH_CONFIG_PATH / "ceph.conf"
     SWIFT_BENCH_CONF = Path("/etc/swift/swift-bench.conf")
-    BENCHMARK_KEYRING = (
-        CEPH_CONFIG_PATH / "ceph.client.ceph-benchmarking.keyring")
+
+    @property
+    def BENCHMARK_KEYRING(self):
+        return (
+            self.CEPH_CONFIG_PATH /
+            "ceph.{}.keyring".format(self.CEPH_CLIENT_NAME)
+        )
+
     TLS_KEY_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.key"
     TLS_PUB_KEY_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking-pub.key"
     TLS_CERT_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.crt"
