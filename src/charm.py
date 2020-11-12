@@ -423,8 +423,8 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             rados_bench_{read|write}_??
         """
         metric_gauge = Gauge(label, description,
-                             ['unit'], registry=registry)
-        metric_gauge.labels(self.unit.name).set(value)
+                             ['model', 'unit'], registry=registry)
+        metric_gauge.labels(self.model.name, self.unit.name).set(value)
 
     # Actions
     def on_rbd_map_image_action(self, event):
