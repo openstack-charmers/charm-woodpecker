@@ -6,6 +6,10 @@ direct=1
 rw={{ action_params.operation }}
 bs={{ action_params.block_size }}
 numjobs={{ action_params.num_jobs }}
+group_reporting=1
+{% if action_params.runtime %}
+runtime={{ action_params.runtime }}
+{% endif %}
 {% for dev in action_params.disk_devices %}
 [job {{loop.index}}]
 filename={{dev}}

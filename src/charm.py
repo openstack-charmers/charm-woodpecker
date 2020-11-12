@@ -122,7 +122,11 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
     RBD_DEV = Path("/dev/rbd")
 
-    REQUIRED_RELATIONS = ["ceph-client"]
+    @property
+    def REQUIRED_RELATIONS(self):
+        if not self.model.storages.get('test-devices'):
+            return ["ceph-client"]
+        return []
 
     CEPH_CONFIG_PATH = Path("/etc/ceph")
     RBD_FIO_CONF = CEPH_CONFIG_PATH / "rbd.fio"
@@ -138,9 +142,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     TLS_CA_CERT_PATH = Path(
         "/usr/local/share/ca-certificates/vault_ca_cert.crt")
     # We have no services to restart so using configs_for_rendering.
-    configs_for_rendering = [
-        str(CEPH_CONF),
-        str(BENCHMARK_KEYRING)]
+    configs_for_rendering = []
     release = "default"
     bindings = ["cluster", "peers", "public"]
     action_output_key = "test-results"
@@ -307,15 +309,15 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         :returns: This method is called for its side effects
         :rtype: None
         """
-        if not self.ceph_client.pools_available:
-            print("Defering setup pools")
-            logging.info("Defering setup")
-            event.defer()
-            return
-
-        self.CEPH_CONFIG_PATH.mkdir(
-            exist_ok=True,
-            mode=0o750)
+        ceph_storage = self.ceph_client.pools_available
+        if ceph_storage:
+            self.configs_for_rendering += [
+                str(self.CEPH_CONF),
+                str(self.BENCHMARK_KEYRING)
+            ]
+            self.CEPH_CONFIG_PATH.mkdir(
+                exist_ok=True,
+                mode=0o750)
 
         def _render_configs():
             for config_file in self.configs_for_rendering:
@@ -671,6 +673,14 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                   results.
         :rtype: None
         """
+        test_devices = self.model.storages.get('test-devices')
+        # If storage binding provided then override disk-devices
+        # unless the application is related to ceph.
+        if not self.ceph_client.pools_available and test_devices:
+            event.params["disk-devices"] = (
+                " ".join([str(d.location) for d in test_devices])
+            )
+
         # If not disk specified use RBD mount
         if not event.params.get("disk-devices"):
             # Prepare the rbd image
@@ -682,9 +692,11 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             event.params["client"] = self.CLIENT_NAME
             event.params["rbd_image"] = self.RBD_IMAGE
             event.params["pool_name"] = self.get_pool_name(event)
+            event.params["ioengine"] = 'rbd'
             _fio_conf = str(self.RBD_FIO_CONF)
         else:
             event.params["disk_devices"] = event.params["disk-devices"].split()
+            event.params["ioengine"] = 'libaio'
             _fio_conf = str(self.DISK_FIO_CONF)
 
         # Add action_parms to adapters
