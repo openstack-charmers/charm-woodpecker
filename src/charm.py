@@ -18,6 +18,7 @@ from ops.main import main
 import ops.model
 import charmhelpers.core.host as ch_host
 import charmhelpers.core.templating as ch_templating
+from charmhelpers.fetch import snap
 import interface_ceph_client.ceph_client as ceph_client
 import interface_tls_certificates.ca_client as ca_client
 import interface_ceph_benchmarking_peers
@@ -102,7 +103,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     """Ceph Benchmarking Charm Base."""
 
     state = StoredState()
-    PACKAGES = ["ceph-common", "fio", "swift-bench"]
+    PACKAGES = ["ceph-common", "fio"]
+    SNAP_NAME = "swift-bench"
+
     CEPH_CAPABILITIES = [
         "osd", "allow *",
         "mon", "allow *",
@@ -156,6 +159,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     TLS_KEY_AND_CERT_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.pem"
     TLS_CA_CERT_PATH = Path(
         "/usr/local/share/ca-certificates/vault_ca_cert.crt")
+
     # We have no services to restart so using configs_for_rendering.
     configs_for_rendering = []
     release = "default"
@@ -219,6 +223,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.framework.observe(
             self.on.rbd_map_image_action,
             self.on_rbd_map_image_action)
+        # snap retry is excessive
+        snap.SNAP_NO_LOCK_RETRY_DELAY = 0.5
+        snap.SNAP_NO_LOCK_RETRY_COUNT = 3
 
     def on_install(self, event):
         """Event handler on install.
@@ -231,7 +238,41 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         if ch_host.is_container():
             logging.warning("Some charm actions cannot be performed while "
                             "deployed in a container.")
+        self.unit.status = ops.model.MaintenanceStatus(
+            "Installing packages and snaps")
         self.install_pkgs()
+        # Perform install tasks
+        snap_path = None
+        try:
+            snap_path = self.model.resources.fetch(self.SNAP_NAME)
+        except ops.model.ModelError:
+            self.unit.status = ops.model.BlockedStatus(
+                "Upload swift-bench snap resource to proceed")
+            logging.warning(
+                "No snap resource available, install blocked, deferring event:"
+                " {}".format(event.handle)
+            )
+            self._defer_once(event)
+
+            return
+        # Install the resource
+        try:
+            snap.snap_install(
+                str(snap_path), "--dangerous", "--classic"
+            )  # TODO: Remove devmode when snap is ready
+        except snap.CouldNotAcquireLockException:
+            self.unit.status = ops.model.BlockedStatus(
+                "Resource failed to install")
+            logging.error(
+                "Could not install resource, deferring event: {}"
+                .format(event.handle)
+            )
+            self._defer_once(event)
+
+            return
+        self.unit.status = ops.model.MaintenanceStatus("Install complete")
+        logging.info("Install of software complete")
+        self.state.installed = True
 
     def on_has_peers(self, event):
         """Event handler on has peers.
