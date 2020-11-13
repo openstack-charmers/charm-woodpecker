@@ -172,6 +172,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         super().register_status_check(self.custom_status_check)
         logging.info("Using {} class".format(self.release))
         self._stored.set_default(
+            swift_bench_snap_installed=False,
             target_created=False,
             enable_tls=False,
             swift_key=None)
@@ -260,6 +261,8 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             snap.snap_install(
                 str(snap_path), "--dangerous", "--classic"
             )  # TODO: Remove devmode when snap is ready
+            # Set the snap has been installed
+            self._stored.swift_bench_snap_installed = True
         except snap.CouldNotAcquireLockException:
             self.unit.status = ops.model.BlockedStatus(
                 "Resource failed to install")
@@ -667,13 +670,25 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                   results.
         :rtype: None
         """
+        if not self._stored.swift_bench_snap_installed:
+            _msg = "Upload swift-bench snap resource to proceed"
+            self.unit.status = ops.model.BlockedStatus(_msg)
+            event.fail(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
+            return
+
         _bench = bench_tools.BenchTools(self)
 
         if not self.get_swift_key():
             _msg = ("Unable to set sift key. Please run the action on the "
                     "leader.")
             event.fail(_msg)
-            raise Exception(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
+            return
 
         # Add action_parms to adapters
         self.set_action_params(event)
@@ -808,6 +823,28 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             event.set_results({
                 "stderr": _msg,
                 "code": "1"})
+
+    def _defer_once(self, event):
+        """Defer the given event, but only once."""
+        notice_count = 0
+        handle = str(event.handle)
+
+        for event_path, _, _ in self.framework._storage.notices(None):
+            if event_path.startswith(handle.split("[")[0]):
+                notice_count += 1
+                logging.debug("Found event: {} x {}"
+                              .format(event_path, notice_count))
+
+        if notice_count > 1:
+            logging.debug(
+                "Not deferring {} notice count of {}"
+                .format(handle, notice_count)
+            )
+        else:
+            logging.debug(
+                "Deferring {} notice count of {}".format(handle, notice_count)
+            )
+            event.defer()
 
 
 @ops_openstack.core.charm_class
