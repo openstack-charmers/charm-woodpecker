@@ -356,7 +356,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         :rtype: None
         """
         addresses = set()
-        for binding_name in self.bingings:
+        for binding_name in self.bindings:
             binding = self.model.get_binding(binding_name)
             addresses.add(binding.network.ingress_address)
             addresses.add(binding.network.bind_address)
