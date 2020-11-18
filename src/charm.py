@@ -18,6 +18,7 @@ from ops.main import main
 import ops.model
 import charmhelpers.core.host as ch_host
 import charmhelpers.core.templating as ch_templating
+from charmhelpers.fetch import snap
 import interface_ceph_client.ceph_client as ceph_client
 import interface_tls_certificates.ca_client as ca_client
 import interface_ceph_benchmarking_peers
@@ -102,7 +103,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     """Ceph Benchmarking Charm Base."""
 
     state = StoredState()
-    PACKAGES = ["ceph-common", "fio", "swift-bench"]
+    PACKAGES = ["ceph-common", "fio"]
+    SNAP_NAME = "swift-bench"
+
     CEPH_CAPABILITIES = [
         "osd", "allow *",
         "mon", "allow *",
@@ -156,6 +159,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     TLS_KEY_AND_CERT_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.pem"
     TLS_CA_CERT_PATH = Path(
         "/usr/local/share/ca-certificates/vault_ca_cert.crt")
+
     # We have no services to restart so using configs_for_rendering.
     configs_for_rendering = []
     release = "default"
@@ -168,8 +172,10 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         super().register_status_check(self.custom_status_check)
         logging.info("Using {} class".format(self.release))
         self._stored.set_default(
+            swift_bench_snap_installed=False,
             target_created=False,
-            enable_tls=False)
+            enable_tls=False,
+            swift_key=None)
         self.ceph_client = ceph_client.CephClientRequires(
             self,
             "ceph-client")
@@ -218,6 +224,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.framework.observe(
             self.on.rbd_map_image_action,
             self.on_rbd_map_image_action)
+        # snap retry is excessive
+        snap.SNAP_NO_LOCK_RETRY_DELAY = 0.5
+        snap.SNAP_NO_LOCK_RETRY_COUNT = 3
 
     def on_install(self, event):
         """Event handler on install.
@@ -230,7 +239,43 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         if ch_host.is_container():
             logging.warning("Some charm actions cannot be performed while "
                             "deployed in a container.")
+        self.unit.status = ops.model.MaintenanceStatus(
+            "Installing packages and snaps")
         self.install_pkgs()
+        # Perform install tasks
+        snap_path = None
+        try:
+            snap_path = self.model.resources.fetch(self.SNAP_NAME)
+        except ops.model.ModelError:
+            self.unit.status = ops.model.BlockedStatus(
+                "Upload swift-bench snap resource to proceed")
+            logging.warning(
+                "No snap resource available, install blocked, deferring event:"
+                " {}".format(event.handle)
+            )
+            self._defer_once(event)
+
+            return
+        # Install the resource
+        try:
+            snap.snap_install(
+                str(snap_path), "--dangerous", "--classic"
+            )  # TODO: Remove devmode when snap is ready
+            # Set the snap has been installed
+            self._stored.swift_bench_snap_installed = True
+        except snap.CouldNotAcquireLockException:
+            self.unit.status = ops.model.BlockedStatus(
+                "Resource failed to install")
+            logging.error(
+                "Could not install resource, deferring event: {}"
+                .format(event.handle)
+            )
+            self._defer_once(event)
+
+            return
+        self.unit.status = ops.model.MaintenanceStatus("Install complete")
+        logging.info("Install of software complete")
+        self.state.installed = True
 
     def on_has_peers(self, event):
         """Event handler on has peers.
@@ -607,10 +652,11 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         :returns: Key for authenticating against swift
         :rtype: String
         """
-        if not self.peers.swift_key:
+        if not self.peers.swift_key and self.unit.is_leader():
             # If the leader create and set the swift key
-            if self.unit.is_leader():
-                self.peers.set_swift_key(ch_host.pwgen())
+            _swift_key = self._stored.swift_key or ch_host.pwgen()
+            self._stored.swift_key = _swift_key
+            self.peers.set_swift_key(_swift_key)
         return self.peers.swift_key
 
     def on_swift_bench_action(self, event):
@@ -624,13 +670,25 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                   results.
         :rtype: None
         """
+        if not self._stored.swift_bench_snap_installed:
+            _msg = "Upload swift-bench snap resource to proceed"
+            self.unit.status = ops.model.BlockedStatus(_msg)
+            event.fail(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
+            return
+
         _bench = bench_tools.BenchTools(self)
 
         if not self.get_swift_key():
             _msg = ("Unable to set sift key. Please run the action on the "
                     "leader.")
             event.fail(_msg)
-            raise Exception(_msg)
+            event.set_results({
+                "stderr": _msg,
+                "code": "1"})
+            return
 
         # Add action_parms to adapters
         self.set_action_params(event)
@@ -765,6 +823,28 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             event.set_results({
                 "stderr": _msg,
                 "code": "1"})
+
+    def _defer_once(self, event):
+        """Defer the given event, but only once."""
+        notice_count = 0
+        handle = str(event.handle)
+
+        for event_path, _, _ in self.framework._storage.notices(None):
+            if event_path.startswith(handle.split("[")[0]):
+                notice_count += 1
+                logging.debug("Found event: {} x {}"
+                              .format(event_path, notice_count))
+
+        if notice_count > 1:
+            logging.debug(
+                "Not deferring {} notice count of {}"
+                .format(handle, notice_count)
+            )
+        else:
+            logging.debug(
+                "Deferring {} notice count of {}".format(handle, notice_count)
+            )
+            event.defer()
 
 
 @ops_openstack.core.charm_class

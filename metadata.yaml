@@ -12,6 +12,12 @@ series:
   - focal
 subordinate: false
 min-juju-version: 2.7.6
+resources:
+  swift-bench:
+    type: file
+    filename: 'swift-bench.snap'
+    description: |
+      Swift Bench snap.
 extra-bindings:
   public:  # ceph-mon control
   cluster: # ceph-osd data

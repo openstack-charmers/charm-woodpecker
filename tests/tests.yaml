@@ -1,27 +1,20 @@
 charm_name: ceph-benchmarking
 gate_bundles:
-  - focal: focal-octopus
-  - focal: focal-octopus-encrypted
+  - focal-octopus
+  - focal-octopus-encrypted
   - bionic-nautilus
   - bionic-nautilus-encrypted
   - bionic-octopus
   - bionic-octopus-encrypted
 smoke_bundles:
-  - bionic-octopus
+  - focal-octopus
 configure:
   - zaza.openstack.charm_tests.vault.setup.auto_initialize_no_validation_no_wait
-  - focal:
-    - zaza.openstack.charm_tests.vault.setup.auto_initialize_no_validation_no_wait
 tests:
   - zaza.openstack.charm_tests.ceph.benchmarking.tests.RadosBenchmarkTests
   - zaza.openstack.charm_tests.ceph.benchmarking.tests.RBDBenchmarkTests
   - zaza.openstack.charm_tests.ceph.benchmarking.tests.FIOBenchmarkTests
   - zaza.openstack.charm_tests.ceph.benchmarking.tests.SwiftBenchmarkTests
-  - focal:
-    - zaza.openstack.charm_tests.ceph.benchmarking.tests.RadosBenchmarkTests
-    - zaza.openstack.charm_tests.ceph.benchmarking.tests.RBDBenchmarkTests
-    - zaza.openstack.charm_tests.ceph.benchmarking.tests.FIOBenchmarkTests
-    # Focal's swift-bench is currently broken
 target_deploy_status:
   vault:
     workload-status: blocked

@@ -25,6 +25,27 @@ Then add a relation to the ceph-mon application:
 
     juju add-relation ceph-benchmarking:ceph-client ceph-mon:client
 
+## Snap on Ubuntu 20.04 (Focal)
+
+Due to [LP Bug #1902951][swift-bench-bug] it is necessary to use the [Swift
+Bench Snap][swift-bench-snap] when deploying ceph-benchmarking on Ubuntu 20.04
+(Focal).
+
+In the bundle:
+
+... code-block:: console
+
+  ceph-benchmarking:
+    num_units: 1
+    series: focal
+    resources:
+      swift-bench: /path/to/swift-bench.snap
+
+
+From command line:
+
+:command:`juju attach-resource ceph-benchmarking swift-bench=/path/to/swift-bench.snap
+
 ## Actions
 
 This section covers Juju [actions][juju-docs-actions] supported by the charm.
@@ -58,3 +79,5 @@ For general charm questions refer to the [OpenStack Charm Guide][cg].
 [cdg]: https://docs.openstack.org/project-deploy-guide/charm-deployment-guide
 [juju-docs-actions]: https://jaas.ai/docs/actions
 [lp-bugs-charm-ceph-benchmarking]: https://bugs.launchpad.net/charm-ceph-benchmarking/+filebug
+[swift-bench-bug]: https://bugs.launchpad.net/ubuntu/+source/swift-bench/+bug/1902951
+[swift-bench-snap]: https://github.com/openstack-charmers/snap-swift-bench
