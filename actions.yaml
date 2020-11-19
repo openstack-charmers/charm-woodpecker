@@ -70,10 +70,10 @@ swift-bench:
       type: integer
       default: 10000
       description: "Number of GET operations to permform"
-    num-jobs:
-      type: integer
-      default: 8
-      description: "Number of GET operations to permform"
+    delete-objects:
+      type: boolean
+      default: True
+      description: "Delete objects after test"
   required:
     - swift-address
 fio:

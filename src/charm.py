@@ -721,7 +721,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         # Run bench
         logging.info("Running swift bench")
         try:
-            _result = _bench.swift_bench()
+            _result = _bench.swift_bench(delete=event.params["delete-objects"])
             event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             # For some reason swift-bench sends outpout to stderr
