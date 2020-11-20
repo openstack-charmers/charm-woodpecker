@@ -659,6 +659,26 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             self.peers.set_swift_key(_swift_key)
         return self.peers.swift_key
 
+    def parse_swift_bench_output(self, output):
+        """ Parse Swift Bench Output
+
+        :param output: Swift Bench text output
+        :type output: string
+        :returns: Dictionary of results.
+        :rtype: dict
+        """
+        _result = {}
+        for line in output.split("\n"):
+            if "FINAL" in line:
+                _parts = line.split()
+                _result[_parts[5].lower()] = {
+                    "date": _parts[1],
+                    "timestamp": _parts[2],
+                    "successes": _parts[4],
+                    "failures": _parts[7].strip("["),
+                    "bw": _parts[9].replace("/s", "")}
+        return _result
+
     def on_swift_bench_action(self, event):
         """Event handler on Swift bench action.
 
@@ -722,6 +742,39 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info("Running swift bench")
         try:
             _result = _bench.swift_bench(delete=event.params["delete-objects"])
+
+            push_gateway = self.model.config.get("push-gateway")
+            if push_gateway:
+                # Parse the text output into a dictionary
+                job = self.parse_swift_bench_output(_result)
+                registry = CollectorRegistry()
+                for metric in job.keys():
+                    bandwidth = job[metric]["bw"]
+                    successes = job[metric]["successes"]
+                    failures = job[metric]["failures"]
+                    if all((bandwidth, successes, failures)):
+                        self.add_benchmark_metric(
+                            registry,
+                            'swift_bench_{}_bandwidth'.format(metric),
+                            'Swift Bench {} bandwidth (B/s)'.format(metric),
+                            bandwidth
+                        )
+                        self.add_benchmark_metric(
+                            registry,
+                            'swift_bench_{}_successes'.format(metric),
+                            'Swift Bench {} Successes'.format(metric),
+                            successes
+                        )
+                        self.add_benchmark_metric(
+                            registry,
+                            'swift_bench_{}_failures'.format(metric),
+                            'Swift Bench {} failures'.format(metric),
+                            failures
+                        )
+                push_to_gateway(push_gateway,
+                                job='ceph-benchmarking-swift-bench',
+                                registry=registry)
+
             event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             # For some reason swift-bench sends outpout to stderr
