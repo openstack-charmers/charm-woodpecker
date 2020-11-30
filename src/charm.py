@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from base64 import b64decode
 import hashlib
 import json
 import socket
@@ -145,6 +146,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     DISK_FIO_CONF = CEPH_CONFIG_PATH / "disk.fio"
     CEPH_CONF = CEPH_CONFIG_PATH / "ceph.conf"
     SWIFT_BENCH_CONF = Path("/etc/swift/swift-bench.conf")
+    SSL_CA = Path("/usr/local/share/ca-certificates/ssl_ca.crt")
 
     @property
     def BENCHMARK_KEYRING(self):
@@ -378,6 +380,14 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             self.CEPH_CONFIG_PATH.mkdir(
                 exist_ok=True,
                 mode=0o750)
+
+        # Check for config based (not vault certificates) SSL
+        # Write the CA certificate
+        if self.model.config.get("ssl_ca"):
+            with open(self.SSL_CA, 'wb') as fh:
+                fh.write(b64decode(self.model.config.get("ssl_ca")))
+            subprocess.check_call(['update-ca-certificates', '--fresh'])
+            self._stored.enable_tls = True
 
         def _render_configs():
             for config_file in self.configs_for_rendering:
