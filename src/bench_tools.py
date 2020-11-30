@@ -62,8 +62,11 @@ class BenchTools():
         _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)
         return _output.decode("UTF-8")
 
-    def swift_bench(self):
-        _cmd = ["swift-bench", str(self.charm_instance.SWIFT_BENCH_CONF)]
+    def swift_bench(self, delete=True):
+        _cmd = ["swift-bench"]
+        if not delete:
+            _cmd.append("-x")
+        _cmd.append(str(self.charm_instance.SWIFT_BENCH_CONF))
         # For some reason swift-bench sends outpout to stderr
         _output = subprocess.check_output(_cmd, stderr=subprocess.STDOUT)
         return _output.decode("UTF-8")
