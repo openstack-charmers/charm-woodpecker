@@ -36,3 +36,10 @@ options:
     default:
     description: |
       IP address of Prometheus Push Gateway
+  ssl_ca:
+    type: string
+    default:
+    description: |
+      Base64 encoded SSL CA to use when contacting ceph-radosgw via TLS. Only
+      required if vault certificates are not in use and ceph-radosgw is using
+      an external CA.
