@@ -738,25 +738,31 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 # on subsequent steps
                 event.set_results({self.action_output_key: _result})
             except subprocess.CalledProcessError as e:
-                _msg = ("Rados GW user and key creation failed: {}"
-                        .format(e.stderr.decode("UTF-8")))
-                logging.error(_msg)
-                event.fail(_msg)
-                event.set_results({
-                    "stderr": _msg,
-                    "code": "1"})
-                raise
+                if ("user: {} exists".format(self.CLIENT_NAME)
+                        not in e.stderr.decode("UTF-8")):
+                    _msg = ("Rados GW user and key creation failed: {}"
+                            .format(e.stderr.decode("UTF-8")))
+                    logging.error(_msg)
+                    event.fail(_msg)
+                    event.set_results({
+                        "stderr": _msg,
+                        "code": "1"})
+                    raise
+                else:
+                    logging.warning(
+                        "User: {} already exists.".format(self.CLIENT_NAME))
             self.peers.set_swift_user_created(self.SWIFT_USER)
 
         # Run bench
         logging.info("Running swift bench")
         try:
             _result = _bench.swift_bench(delete=event.params["delete-objects"])
+            job = self.parse_swift_bench_output(_result)
+            json_result = json.dumps(job)
 
             push_gateway = self.model.config.get("push-gateway")
             if push_gateway:
                 # Parse the text output into a dictionary
-                job = self.parse_swift_bench_output(_result)
                 registry = CollectorRegistry()
                 for metric in job.keys():
                     bandwidth = job[metric]["bw"]
@@ -785,12 +791,22 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                                 job='ceph-benchmarking-swift-bench',
                                 registry=registry)
 
-            event.set_results({self.action_output_key: _result})
+            event.set_results({self.action_output_key: json_result})
         except subprocess.CalledProcessError as e:
             # For some reason swift-bench sends outpout to stderr
             # So stderr is also on stdout
+            _output = e.stdout.decode("UTF-8")
+            _result = self.parse_swift_bench_output(_output)
+            # There may be too many connection reset tracebacks in the raw
+            # output overloading stack limits.
+            if _result.get("puts"):
+                # If we got partial data use that
+                _result = json.dumps(_result)
+            else:
+                # Otherwise, return raw output (tracebacks)
+                _result = _output
             _msg = ("swift bench failed: {}"
-                    .format(e.stdout.decode("UTF-8")))
+                    .format(_result))
             logging.error(_msg)
             event.fail(_msg)
             event.set_results({
