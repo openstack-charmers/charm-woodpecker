@@ -100,11 +100,11 @@ fio:
       description: "IO Depth"
     operation:
       type: string
-      default: read
+      default: randrw
       description: "Operation: read, write"
     num-jobs:
       type: integer
-      default: 8
+      default: 1
       description: "Number of GET operations to permform"
     runtime:
       type: integer
