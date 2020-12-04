@@ -176,8 +176,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self._stored.set_default(
             swift_bench_snap_installed=False,
             target_created=False,
-            enable_tls=False,
-            swift_key=None)
+            enable_tls=False)
         self.ceph_client = ceph_client.CephClientRequires(
             self,
             "ceph-client")
@@ -381,6 +380,10 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 exist_ok=True,
                 mode=0o750)
 
+        # Generate the swift bench key early
+        if not self.peers.swift_key and self.unit.is_leader():
+            self.get_swift_key()
+
         # Check for config based (not vault certificates) SSL
         # Write the CA certificate
         if self.model.config.get("ssl_ca"):
@@ -397,6 +400,11 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                     self.adapters)
         logging.info("Rendering config")
         _render_configs()
+
+        # Create radosgw user for swift-bench after rendered
+        if self.unit.is_leader():
+            self.radosgw_user_create()
+
         logging.info("Setting started state")
         self._stored.is_started = True
         self.update_status()
@@ -664,8 +672,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         """
         if not self.peers.swift_key and self.unit.is_leader():
             # If the leader create and set the swift key
-            _swift_key = self._stored.swift_key or ch_host.pwgen()
-            self._stored.swift_key = _swift_key
+            _swift_key = ch_host.pwgen()
             self.peers.set_swift_key(_swift_key)
         return self.peers.swift_key
 
@@ -689,6 +696,39 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                     "bw": _parts[9].replace("/s", "")}
         return _result
 
+    def radosgw_user_create(self):
+        """Create raodsgw user.
+
+        Create the radosgw ceph user
+        :returns: This method is called for its side effects.
+        :rtype: None
+        """
+        if not self._stored.swift_bench_snap_installed:
+            _msg = "Upload swift-bench snap resource to proceed"
+            self.unit.status = ops.model.BlockedStatus(_msg)
+            return
+
+        _bench = bench_tools.BenchTools(self)
+
+        if not self.peers.swift_user_created:
+            logging.info("Create radosgw user and key")
+            try:
+                _bench.radosgw_user_create(
+                    self.CLIENT_NAME,
+                    "swift",
+                    self.get_swift_key())
+                self.peers.set_swift_user_created(self.SWIFT_USER)
+                logging.info("Successfully created the radosgw user and key")
+            except subprocess.CalledProcessError as e:
+                if ("user: {} exists".format(self.CLIENT_NAME)
+                        not in e.stderr.decode("UTF-8")):
+                    _msg = ("Rados GW user and key creation failed: {}"
+                            .format(e.stderr.decode("UTF-8")))
+                    logging.error(_msg)
+                else:
+                    logging.warning(
+                        "User: {} already exists.".format(self.CLIENT_NAME))
+
     def on_swift_bench_action(self, event):
         """Event handler on Swift bench action.
 
@@ -709,10 +749,8 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 "code": "1"})
             return
 
-        _bench = bench_tools.BenchTools(self)
-
         if not self.get_swift_key():
-            _msg = ("Unable to set sift key. Please run the action on the "
+            _msg = ("Unable to set swift key. Please run the action on the "
                     "leader.")
             event.fail(_msg)
             event.set_results({
@@ -720,38 +758,17 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
                 "code": "1"})
             return
 
+        if not self.peers.swift_user_created:
+            self.radosgw_user_create()
+
+        _bench = bench_tools.BenchTools(self)
+
         # Add action_parms to adapters
         self.set_action_params(event)
         # Add swift-bench.conf for rendering
         self.configs_for_rendering.append(str(self.SWIFT_BENCH_CONF))
         # Render swift-bench.conf with action_params
         self.render_config(event)
-
-        logging.info("Create radosgw user and key")
-        if not self.peers.swift_user_created:
-            try:
-                _result = _bench.radosgw_user_create(
-                    self.CLIENT_NAME,
-                    "swift",
-                    self.get_swift_key())
-                # XXX We actually don't care about this output unless we fail
-                # on subsequent steps
-                event.set_results({self.action_output_key: _result})
-            except subprocess.CalledProcessError as e:
-                if ("user: {} exists".format(self.CLIENT_NAME)
-                        not in e.stderr.decode("UTF-8")):
-                    _msg = ("Rados GW user and key creation failed: {}"
-                            .format(e.stderr.decode("UTF-8")))
-                    logging.error(_msg)
-                    event.fail(_msg)
-                    event.set_results({
-                        "stderr": _msg,
-                        "code": "1"})
-                    raise
-                else:
-                    logging.warning(
-                        "User: {} already exists.".format(self.CLIENT_NAME))
-            self.peers.set_swift_user_created(self.SWIFT_USER)
 
         # Run bench
         logging.info("Running swift bench")
