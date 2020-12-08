@@ -18,17 +18,11 @@ resources:
     filename: 'swift-bench.snap'
     description: |
       Swift Bench snap.
-extra-bindings:
-  public:  # ceph-mon control
-  cluster: # ceph-osd data
 requires:
   ceph-client:
     interface: ceph-client
   certificates:
     interface: tls-certificates
-peers:
-  peers:
-    interface: ceph-benchmarking-peer
 storage:
   test-devices:
     type: block
