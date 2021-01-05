@@ -26,7 +26,7 @@ import interface_ceph_benchmarking_peers
 
 import bench_tools
 
-from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+from prometheus_client import start_http_server, Gauge
 
 import ops_openstack.adapters
 import ops_openstack.core
@@ -168,6 +168,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     bindings = ["cluster", "peers", "public"]
     action_output_key = "test-results"
 
+    # Cache on metric gauges for prometheus
+    metrics = {}
+
     def __init__(self, framework):
         """Init Ceph Benchmarking Charm Base."""
         super().__init__(framework)
@@ -225,6 +228,10 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.framework.observe(
             self.on.rbd_map_image_action,
             self.on_rbd_map_image_action)
+        self.framework.observe(
+            self.on["prometheus-target"].relation_joined,
+            self.on_prometheus_target_joined
+        )
         # snap retry is excessive
         snap.SNAP_NO_LOCK_RETRY_DELAY = 0.5
         snap.SNAP_NO_LOCK_RETRY_COUNT = 3
@@ -277,6 +284,20 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.unit.status = ops.model.MaintenanceStatus("Install complete")
         logging.info("Install of software complete")
         self.state.installed = True
+
+    def on_prometheus_target_joined(self, event):
+        """Event handler for prometheus-target http interface
+
+        :param event: Event
+        :type event: Operator framework event object
+        :returns: This method is called for its side effects
+        :rtype: None
+        """
+        event.relation.data[self.unit].update({
+            "hostname": str(self.model.get_binding(
+                event.relation).network.ingress_address),
+            "port": "8088",
+        })
 
     def on_has_peers(self, event):
         """Event handler on has peers.
@@ -478,16 +499,20 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         else:
             return ops.model.ActiveStatus()
 
-    def add_benchmark_metric(self, registry, label, description, value):
+    def add_benchmark_metric(self, label, description, value):
         """
         labels:
             fio_{read|write}_{iops,bandwidth,latency}
             rbd_bench_{read|write}_??
             rados_bench_{read|write}_??
         """
-        metric_gauge = Gauge(label, description,
-                             ['model', 'unit'], registry=registry)
-        metric_gauge.labels(self.model.name, self.unit.name).set(value)
+        if label not in self.metrics:
+            self.metrics[label] = Gauge(
+                label, description,
+                ['model', 'unit']
+            )
+        self.metrics[label].labels(
+            self.model.name, self.unit.name).set(value)
 
     # Actions
     def on_rbd_map_image_action(self, event):
@@ -770,6 +795,9 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         # Render swift-bench.conf with action_params
         self.render_config(event)
 
+        # Prometheus target for scraping of collected FIO metrics
+        start_http_server(8088)
+
         # Run bench
         logging.info("Running swift bench")
         try:
@@ -777,36 +805,26 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             job = self.parse_swift_bench_output(_result)
             json_result = json.dumps(job)
 
-            push_gateway = self.model.config.get("push-gateway")
-            if push_gateway:
-                # Parse the text output into a dictionary
-                registry = CollectorRegistry()
-                for metric in job.keys():
-                    bandwidth = job[metric]["bw"]
-                    successes = job[metric]["successes"]
-                    failures = job[metric]["failures"]
-                    if all((bandwidth, successes, failures)):
-                        self.add_benchmark_metric(
-                            registry,
-                            'swift_bench_{}_bandwidth'.format(metric),
-                            'Swift Bench {} bandwidth (B/s)'.format(metric),
-                            bandwidth
-                        )
-                        self.add_benchmark_metric(
-                            registry,
-                            'swift_bench_{}_successes'.format(metric),
-                            'Swift Bench {} Successes'.format(metric),
-                            successes
-                        )
-                        self.add_benchmark_metric(
-                            registry,
-                            'swift_bench_{}_failures'.format(metric),
-                            'Swift Bench {} failures'.format(metric),
-                            failures
-                        )
-                push_to_gateway(push_gateway,
-                                job='ceph-benchmarking-swift-bench',
-                                registry=registry)
+            for metric in job.keys():
+                bandwidth = job[metric]["bw"]
+                successes = job[metric]["successes"]
+                failures = job[metric]["failures"]
+                if all((bandwidth, successes, failures)):
+                    self.add_benchmark_metric(
+                        'swift_bench_{}_bandwidth'.format(metric),
+                        'Swift Bench {} bandwidth (B/s)'.format(metric),
+                        bandwidth
+                    )
+                    self.add_benchmark_metric(
+                        'swift_bench_{}_successes'.format(metric),
+                        'Swift Bench {} Successes'.format(metric),
+                        successes
+                    )
+                    self.add_benchmark_metric(
+                        'swift_bench_{}_failures'.format(metric),
+                        'Swift Bench {} failures'.format(metric),
+                        failures
+                    )
 
             event.set_results({self.action_output_key: json_result})
         except subprocess.CalledProcessError as e:
@@ -870,46 +888,50 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
         # Add action_parms to adapters
         self.set_action_params(event)
+        # Individual test execution runtime
+        # This allows us to report metrics periodically to prometheus
+        test_runtime = 30
+        # Total test duration time (from action params)
+        remaining_runtime = max(test_runtime, int(event.params.get('runtime')))
         # Render fio config file
         self.configs_for_rendering.append(_fio_conf)
         self.render_config(event)
 
         _bench = bench_tools.BenchTools(self)
 
+        # Prometheus target for scraping of collected FIO metrics
+        start_http_server(8088)
+
         logging.info(
             "Running fio {}".format(event.params["operation"]))
         try:
-            _result = json.loads(_bench.fio(_fio_conf))
-            push_gateway = self.model.config.get("push-gateway")
-            if push_gateway:
-                registry = CollectorRegistry()
+            while (remaining_runtime > 0):
+                _result = json.loads(_bench.fio(_fio_conf))
                 for job in _result["jobs"]:
                     for metric in ('read', 'write'):
                         bandwidth = job[metric]["bw"]
                         iops = job[metric]["iops"]
+                        # lat_ns is broadly slat + clat so
+                        # represents what the calling application
+                        # would actually see in terms of latency
                         latency = job[metric]["lat_ns"]["mean"]
                         if all((bandwidth, iops, latency)):
                             self.add_benchmark_metric(
-                                registry,
                                 'fio_{}_bandwidth'.format(metric),
                                 'FIO {} bandwidth (B/s)'.format(metric),
                                 bandwidth
                             )
                             self.add_benchmark_metric(
-                                registry,
                                 'fio_{}_iops'.format(metric),
                                 'FIO {} IOPS'.format(metric),
                                 iops
                             )
                             self.add_benchmark_metric(
-                                registry,
                                 'fio_{}_latency'.format(metric),
                                 'FIO {} latency (ns)'.format(metric),
                                 latency
                             )
-                push_to_gateway(push_gateway,
-                                job='ceph-benchmarking-fio',
-                                registry=registry)
+                remaining_runtime -= test_runtime
             event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             _msg = ("fio failed: {}"

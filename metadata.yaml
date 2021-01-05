@@ -26,6 +26,9 @@ requires:
     interface: ceph-client
   certificates:
     interface: tls-certificates
+provides:
+  prometheus-target:
+    interface: http
 peers:
   peers:
     interface: ceph-benchmarking-peer
