@@ -24,6 +24,7 @@ options:
       configuration from outside of Launchpad archives or PPA's.
   block-devices:
     type: string
+    default:
     description: |
       Space delimted list of block devices.
   pool-name:

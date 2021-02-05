@@ -110,3 +110,15 @@ fio:
       type: integer
       default: 60
       description: "Limit the duration of the test"
+    latency-target:
+      type: integer
+      default:
+      description: "Latency target in microseconds for latency profile based testing"
+    latency-window:
+      type: integer
+      default: 5000000
+      description: "Latency target profile window (default - 5s) in microseconds"
+    latency-percentile:
+      type: number
+      default: 90.0
+      description: "Percentage of IO's that must be below latency target"

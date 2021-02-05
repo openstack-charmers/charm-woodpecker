@@ -4,10 +4,16 @@ ioengine={{ action_params.ioengine }}
 iodepth={{ action_params.iodepth }}
 direct=1
 rw={{ action_params.operation }}
+random_generator=lfsr
 bs={{ action_params.block_size }}
 numjobs={{ action_params.num_jobs }}
 group_reporting=1
 runtime=30
+{% if action_params.latency_target %}
+latency_target={{ action_params.latency_target }}
+latency_window={{ action_params.latency_window }}
+latency_percentile={{ action_params.latency_percentile }}
+{% endif %}
 {% for dev in action_params.disk_devices %}
 [job {{loop.index}}]
 filename={{dev}}
