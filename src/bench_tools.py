@@ -78,13 +78,13 @@ class BenchTools():
 
     def radosgw_user_create(self, user, subuser, secret):
         """
-        radosgw-admin user create -n client.ceph-benchmarking
+        radosgw-admin user create -n client.woodpecker
           --uid="benchmark" --display-name="benchmark"
-        radosgw-admin subuser create -n client.ceph-benchmarking
+        radosgw-admin subuser create -n client.woodpecker
           --uid=benchmark --subuser=benchmark:swift --access=full
-        radosgw-admin key create -n client.ceph-benchmarking
+        radosgw-admin key create -n client.woodpecker
           --subuser=benchmark:swift --key-type=swift --secret=guessme
-        radosgw-admin user modify -n client.ceph-benchmarking
+        radosgw-admin user modify -n client.woodpecker
           --uid=benchmark --max-buckets=0
         """
         _output = ""

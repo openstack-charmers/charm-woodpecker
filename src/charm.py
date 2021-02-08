@@ -22,7 +22,7 @@ import charmhelpers.core.templating as ch_templating
 from charmhelpers.fetch import snap
 import interface_ceph_client.ceph_client as ceph_client
 import interface_tls_certificates.ca_client as ca_client
-import interface_ceph_benchmarking_peers
+import interface_woodpecker_peers
 
 import bench_tools
 
@@ -61,15 +61,15 @@ class PeerAdapter(ops_openstack.adapters.OpenStackOperRelationAdapter):
         super(PeerAdapter, self).__init__(relation)
 
 
-class CephBenchmarkingPeerAdapter(PeerAdapter):
-    """Ceph Benchmarking Peer Adapter."""
+class WoodpeckerPeerAdapter(PeerAdapter):
+    """Woodpecker Peer Adapter."""
 
     def __init__(self, relation):
-        super(CephBenchmarkingPeerAdapter, self).__init__(relation)
+        super(WoodpeckerPeerAdapter, self).__init__(relation)
 
     @property
     def hosts(self):
-        """Ceph-benchmarking unit addresses."""
+        """woodpecker unit addresses."""
         hosts = self.relation.peers_addresses
         return " ".join(sorted(hosts))
 
@@ -89,19 +89,19 @@ class TLSCertificatesAdapter(
             return False
 
 
-class CephBenchmarkingAdapters(
+class WoodpeckerAdapters(
         ops_openstack.adapters.OpenStackRelationAdapters):
-    """Ceph Benchmarking Adapters."""
+    """Woodpecker Adapters."""
 
     relation_adapters = {
         "ceph-client": CephClientAdapter,
-        "peers": CephBenchmarkingPeerAdapter,
+        "peers": WoodpeckerPeerAdapter,
         "certificates": TLSCertificatesAdapter,
     }
 
 
-class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
-    """Ceph Benchmarking Charm Base."""
+class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
+    """Woodpecker Charm Base."""
 
     state = StoredState()
     PACKAGES = ["ceph-common", "fio"]
@@ -155,10 +155,10 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
             "ceph.{}.keyring".format(self.CEPH_CLIENT_NAME)
         )
 
-    TLS_KEY_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.key"
-    TLS_PUB_KEY_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking-pub.key"
-    TLS_CERT_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.crt"
-    TLS_KEY_AND_CERT_PATH = CEPH_CONFIG_PATH / "ceph-benchmarking.pem"
+    TLS_KEY_PATH = CEPH_CONFIG_PATH / "woodpecker.key"
+    TLS_PUB_KEY_PATH = CEPH_CONFIG_PATH / "woodpecker-pub.key"
+    TLS_CERT_PATH = CEPH_CONFIG_PATH / "woodpecker.crt"
+    TLS_KEY_AND_CERT_PATH = CEPH_CONFIG_PATH / "woodpecker.pem"
     TLS_CA_CERT_PATH = Path(
         "/usr/local/share/ca-certificates/vault_ca_cert.crt")
 
@@ -172,7 +172,7 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
     metrics = {}
 
     def __init__(self, framework):
-        """Init Ceph Benchmarking Charm Base."""
+        """Init Woodpecker Charm Base."""
         super().__init__(framework)
         super().register_status_check(self.custom_status_check)
         logging.info("Using {} class".format(self.release))
@@ -183,13 +183,13 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
         self.ceph_client = ceph_client.CephClientRequires(
             self,
             "ceph-client")
-        self.peers = interface_ceph_benchmarking_peers.CephBenchmarkingPeers(
+        self.peers = interface_woodpecker_peers.WoodpeckerPeers(
             self,
             "peers")
         self.ca_client = ca_client.CAClient(
             self,
             "certificates")
-        self.adapters = CephBenchmarkingAdapters(
+        self.adapters = WoodpeckerAdapters(
             (self.ceph_client, self.peers, self.ca_client),
             self)
         self.framework.observe(
@@ -966,16 +966,16 @@ class CephBenchmarkingCharmBase(ops_openstack.core.OSBaseCharm):
 
 
 @ops_openstack.core.charm_class
-class CephBenchmarkingCharmJewel(CephBenchmarkingCharmBase):
-    """Ceph Benchmarking Charm at Jewel."""
+class WoodpeckerCharmJewel(WoodpeckerCharmBase):
+    """Woodpecker Charm at Jewel."""
 
     state = StoredState()
     release = "jewel"
 
 
 @ops_openstack.core.charm_class
-class CephBenchmarkingCharmOcto(CephBenchmarkingCharmBase):
-    """Ceph Benchmarking Charm at Octopus."""
+class WoodpeckerCharmOcto(WoodpeckerCharmBase):
+    """Woodpecker Charm at Octopus."""
 
     state = StoredState()
     release = "octopus"

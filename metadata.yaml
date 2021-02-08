@@ -1,15 +1,15 @@
-name: ceph-benchmarking
-summary: Charm for executing ceph benchmark testes
+name: woodpecker
+summary: Charm for executing storage benchmarking
 maintainer: OpenStack Charmers <openstack-charmers@lists.ubuntu.com>
 description: |
-  Charm for executing ceph benchmark testes
+  Charm for executing storage benchmarking
 tags:
   - storage
   - ceph
   - openstack
 series:
-  - bionic
   - focal
+  - bionic
 subordinate: false
 min-juju-version: 2.7.6
 resources:
@@ -31,7 +31,7 @@ provides:
     interface: http
 peers:
   peers:
-    interface: ceph-benchmarking-peer
+    interface: woodpecker-peer
 storage:
   test-devices:
     type: block

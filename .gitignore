@@ -5,4 +5,4 @@ __pycache__
 lib/*
 !lib/README.txt
 build
-ceph-benchmarking.charm
+*.charm

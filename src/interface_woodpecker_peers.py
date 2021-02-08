@@ -19,14 +19,14 @@ class ReadyPeersEvent(EventBase):
     pass
 
 
-class CephBenchmarkingPeerEvents(ObjectEvents):
+class WoodpeckerPeerEvents(ObjectEvents):
     has_peers = EventSource(HasPeersEvent)
     ready_peers = EventSource(ReadyPeersEvent)
 
 
-class CephBenchmarkingPeers(Object):
+class WoodpeckerPeers(Object):
 
-    on = CephBenchmarkingPeerEvents()
+    on = WoodpeckerPeerEvents()
     state = StoredState()
     SWIFT_KEY = "swift_key"
     SWIFT_USER_CREATED = "swift_user_created"
@@ -40,7 +40,7 @@ class CephBenchmarkingPeers(Object):
             self.on_changed)
 
     def on_changed(self, event):
-        logging.info("CephBenchmarkingPeers on_changed")
+        logging.info("WoodpeckerPeers on_changed")
         self.on.has_peers.emit()
         if self.ready_peer_details:
             self.on.ready_peers.emit()
