@@ -111,7 +111,7 @@ fio:
       description: "Limit the duration of the test"
     latency-target:
       type: integer
-      default:
+      default: 0
       description: "Latency target in microseconds for latency profile based testing"
     latency-window:
       type: integer
