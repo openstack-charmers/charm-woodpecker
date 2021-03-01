@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from base64 import b64decode
+import datetime
 import hashlib
 import json
 import socket
@@ -892,7 +893,7 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
         # This allows us to report metrics periodically to prometheus
         test_runtime = 30
         # Total test duration time (from action params)
-        remaining_runtime = max(test_runtime, int(event.params.get('runtime')))
+        runtime = max(test_runtime, int(event.params.get('runtime')))
         # Render fio config file
         self.configs_for_rendering.append(_fio_conf)
         self.render_config(event)
@@ -905,7 +906,8 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info(
             "Running fio {}".format(event.params["operation"]))
         try:
-            while (remaining_runtime > 0):
+            test_end = datetime.datetime.now() + datetime.timedelta(seconds=runtime)
+            while (datetime.datetime.now() < test_end):
                 _result = json.loads(_bench.fio(_fio_conf))
                 for job in _result["jobs"]:
                     for metric in ('read', 'write'):
@@ -931,7 +933,6 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
                                 'FIO {} latency (ns)'.format(metric),
                                 latency
                             )
-                remaining_runtime -= test_runtime
             event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
             _msg = ("fio failed: {}"
