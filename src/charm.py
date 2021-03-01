@@ -906,7 +906,10 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
         logging.info(
             "Running fio {}".format(event.params["operation"]))
         try:
-            test_end = datetime.datetime.now() + datetime.timedelta(seconds=runtime)
+            test_end = (
+                datetime.datetime.now() +
+                datetime.timedelta(seconds=runtime)
+            )
             while (datetime.datetime.now() < test_end):
                 _result = json.loads(_bench.fio(_fio_conf))
                 for job in _result["jobs"]:
@@ -931,6 +934,30 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
                             self.add_benchmark_metric(
                                 'fio_{}_latency'.format(metric),
                                 'FIO {} latency (ns)'.format(metric),
+                                latency
+                            )
+                        # But add some more detailed latency reporting anyway
+                        _keys = ('min', 'max', 'mean', 'stddev')
+                        for _key in _keys:
+                            self.add_benchmark_metric(
+                                'fio_{}_{}_{}'.format(metric,
+                                                      'clat',
+                                                      _key),
+                                'FIO {} {} {} (ns)'.format(metric,
+                                                           'clat',
+                                                           _key),
+                                job[metric]["clat_ns"][_key]
+                            )
+                        percentiles = job[metric]["clat_ns"]["percentile"]
+                        for percentile, latency in percentiles.items():
+                            self.add_benchmark_metric(
+                                'fio_{}_{}_{}'.format(
+                                    metric,
+                                    'clat',
+                                    percentile.replace('.', '_')),
+                                'FIO {} {} {} (ns)'.format(metric,
+                                                           'clat',
+                                                           percentile),
                                 latency
                             )
             event.set_results({self.action_output_key: _result})
