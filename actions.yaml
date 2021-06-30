@@ -82,6 +82,13 @@ fio:
     disk-devices:
       type: string
       description: "If unset, use the charm default rbd device in the ceph pool or the block devices provided using test-devices storage. If set run fio, against the set disk. Space delimited list of devices."
+    files:
+      type: string
+      description: |
+        Space delimited list of filenames that fio will lay out for testing. If not
+        specified, a single file will be created; its name will be derived from the
+        unit name. The files will be laid out in the directories specified in the 
+        `directories` config option.
     pool-name:
       type: string
       description: "If using the default rbd device, name of ceph pool for test. Defaults to config option pool-name"

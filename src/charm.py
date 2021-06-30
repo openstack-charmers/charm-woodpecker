@@ -138,7 +138,10 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
 
     @property
     def REQUIRED_RELATIONS(self):
-        if not self.model.storages.get('test-devices'):
+        # The charm requires ceph-client relation, unless there's a juju storage
+        # provided (test-devices) or fio is supposed to run on a filesystem -- in that
+        # case `directories` config option must be specified.
+        if not self.model.storages.get('test-devices') and not self.model.config.get('directories'):
             return ["ceph-client"]
         return []
 
@@ -862,15 +865,43 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
         :rtype: None
         """
         test_devices = self.model.storages.get('test-devices')
+        test_directories = self.model.config.get('directories')
         # If storage binding provided then override disk-devices
         # unless the application is related to ceph.
-        if not self.ceph_client.pools_available and test_devices:
-            event.params["disk-devices"] = (
-                " ".join([str(d.location) for d in test_devices])
-            )
+        if not self.ceph_client.pools_available and (test_devices or test_directories):
+            
+            # Attached storage has priority over filesystem
+            if test_devices:
+                event.params["disk-devices"] = (
+                    " ".join([str(d.location) for d in test_devices])
+                )
+
+            # If there is no strage devices attached, fall back to the filesystem
+            elif test_directories:
+                # Build a list of files that fio should lay out. The resulting list
+                # is a combination of all defined directories (`directories` config
+                # option) and all defined files (`files` action parameter).
+
+                # List of directories
+                directories = test_directories.split(" ")
+
+                # List of files
+                if event.params.get("files"):
+                    files = event.params.get("files").split(" ")
+                else:
+                    # Use unit name if `files` action parameter is not provided
+                    files = [self.model.unit.name.replace('/', '-')]
+
+                # All combinations of directories and files
+                event.params["files"] = [
+                    "/".join([directory, file]) for directory in directories for file in files
+                ]
+
+            logging.debug("disk-devices: %s", event.params.get("disk-devices"))
+            logging.debug("files: %s", event.params.get("files"))
 
         # If not disk specified use RBD mount
-        if not event.params.get("disk-devices"):
+        if not event.params.get("disk-devices") and not event.params.get("files"):
             # Prepare the rbd image
             self.rbd_create_image(event)
             if not ch_host.is_container():
@@ -883,7 +914,13 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             event.params["ioengine"] = 'rbd'
             _fio_conf = str(self.RBD_FIO_CONF)
         else:
-            event.params["disk_devices"] = event.params["disk-devices"].split()
+            if event.params.get("disk-devices"):
+                event.params["disk_devices"] = event.params.get("disk-devices").split()
+
+            if event.params.get("files"):
+                # `filesize` must be defined if fio is working with filesystem
+                event.params["filesize"] = self.model.config.get('filesize')
+
             event.params["ioengine"] = 'libaio'
             _fio_conf = str(self.DISK_FIO_CONF)
 
