@@ -1,3 +1,0 @@
-[client.woodpecker]
-	key = {{ ceph_client.key }}
-

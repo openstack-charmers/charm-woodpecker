@@ -54,6 +54,10 @@ class CephClientAdapter(ops_openstack.adapters.OpenStackOperRelationAdapter):
     def key(self):
         return self.relation.get_relation_data()["key"]
 
+    @property
+    def client_name(self):
+        return self.relation.model.app.name
+
 
 class PeerAdapter(ops_openstack.adapters.OpenStackOperRelationAdapter):
     """Peer Adapter."""
@@ -155,6 +159,8 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             self.CEPH_CONFIG_PATH /
             "ceph.{}.keyring".format(self.CEPH_CLIENT_NAME)
         )
+
+    CEPH_CLIENT_TEMPLATE = "ceph.client.keyring.j2"
 
     TLS_KEY_PATH = CEPH_CONFIG_PATH / "woodpecker.key"
     TLS_PUB_KEY_PATH = CEPH_CONFIG_PATH / "woodpecker-pub.key"
@@ -416,8 +422,11 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
 
         def _render_configs():
             for config_file in self.configs_for_rendering:
+                template_file = os.path.basename(config_file)
+                if config_file == str(self.BENCHMARK_KEYRING):
+                    template_file = self.CEPH_CLIENT_TEMPLATE
                 ch_templating.render(
-                    os.path.basename(config_file),
+                    template_file,
                     config_file,
                     self.adapters)
         logging.info("Rendering config")
