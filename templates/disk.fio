@@ -18,8 +18,16 @@ runtime=120
 {% else %}
 runtime=30
 {% endif %}
+{% if action_params.disk_devices %}
 {% for dev in action_params.disk_devices %}
 [job {{loop.index}}]
 filename={{dev}}
 {% endfor %}
+{% elif action_params.files %}
+{% for file in action_params.files %}
+[job {{loop.index}}]
+filename={{file}}
+filesize={{action_params.filesize}}
+{% endfor %}
+{% endif %}
 {% endif %}

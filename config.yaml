@@ -27,6 +27,19 @@ options:
     default:
     description: |
       Space delimted list of block devices.
+  directories:
+    type: string
+    default:
+    description: |
+      Space delimited list of directories where fio lays out files.
+  filesize:
+    type: string
+    default: 1G
+    description: |
+      The size of a file laid out by fio. This is taken into account only if
+      `directories` config option is defined. For more information about the 
+      fio's `filesize` option, see fio upstream documentation: 
+      https://fio.readthedocs.io/en/latest/fio_doc.html#cmdoption-arg-filesize
   pool-name:
     type: string
     default: ceph-benchmarking
