@@ -85,6 +85,13 @@ fio:
     pool-name:
       type: string
       description: "If using the default rbd device, name of ceph pool for test. Defaults to config option pool-name"
+    ec-pool-name:
+      type: string
+      description: |
+          Optional. 
+          Used during creation of RBD image to benchmark Erasure Coded pools (--data-pool).
+          Erasure coded pool must exists before running fio action.
+          This pool must also have rbd application enabled, and `allow_ec_overwrites` set to true.
     image-size:
       type: integer
       default: 20480

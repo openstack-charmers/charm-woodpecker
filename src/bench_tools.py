@@ -21,10 +21,16 @@ class BenchTools():
         _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)
         return _output.decode("UTF-8")
 
-    def rbd_create_image(self, pool_name, image_size):
+    def rbd_remove_image(self, pool_name):
+        _cmd = ["rbd", "remove", self.charm_instance.RBD_IMAGE,
+                "-p", pool_name, "-n", self.charm_instance.CEPH_CLIENT_NAME]
+        _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)
+        return _output.decode("UTF-8")
+
+    def rbd_create_image(self, pool_name, image_size, extra_args=[]):
         _cmd = ["rbd", "create", self.charm_instance.RBD_IMAGE,
                 "--size", str(image_size), "-p", pool_name,
-                "-n", self.charm_instance.CEPH_CLIENT_NAME]
+                "-n", self.charm_instance.CEPH_CLIENT_NAME] + extra_args
         _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)
         return _output.decode("UTF-8")
 
