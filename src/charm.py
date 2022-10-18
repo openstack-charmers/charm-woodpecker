@@ -2,6 +2,7 @@
 
 from base64 import b64decode
 import datetime
+import errno
 import hashlib
 import json
 import socket
@@ -590,14 +591,13 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             )
             logging.info("rbd image removed")
         except subprocess.CalledProcessError as e:
-            if "No such file or directory" in e.stderr.decode("UTF-8"):
+            if e.returncode == errno.ENOENT:
                 pass
             else:
                 _msg = ("rbd remove image failed: {}"
                         .format(e.stderr.decode("UTF-8")))
                 logging.error(_msg)
                 event.fail(_msg)
-                event.set_results({"stderr": _msg, "code": "1"})
                 raise
 
         # Create the image
@@ -621,7 +621,6 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
                     .format(e.stderr.decode("UTF-8")))
             logging.error(_msg)
             event.fail(_msg)
-            event.set_results({"stderr": _msg, "code": "1"})
             raise
 
     def rbd_map_image(self, event):
