@@ -2,6 +2,7 @@
 
 from base64 import b64decode
 import datetime
+import errno
 import hashlib
 import json
 import socket
@@ -582,27 +583,45 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
         """
         _bench = bench_tools.BenchTools(self)
 
+        # Remove image if existing
+        logging.info("Removing rbd image if existing")
+        try:
+            _bench.rbd_remove_image(
+                self.get_pool_name(event),
+            )
+            logging.info("rbd image removed")
+        except subprocess.CalledProcessError as e:
+            if e.returncode == errno.ENOENT:
+                pass
+            else:
+                _msg = ("rbd remove image failed: {}"
+                        .format(e.stderr.decode("UTF-8")))
+                logging.error(_msg)
+                event.fail(_msg)
+                raise
+
         # Create the image
         logging.info("Create the rbd image")
         try:
+            extra_args = []
+            if event.params.get("ec-pool-name"):
+                extra_args = extra_args + \
+                    ["--data-pool", event.params.get("ec-pool-name")]
+
             _result = _bench.rbd_create_image(
                 self.get_pool_name(event),
-                event.params["image-size"])
+                event.params["image-size"],
+                extra_args
+            )
             # XXX We actually don't care about this output unless we fail on
             # subsequent steps
             event.set_results({self.action_output_key: _result})
         except subprocess.CalledProcessError as e:
-            if "already exists" in e.stderr.decode("UTF-8"):
-                logging.warning(e.stderr.decode("UTF-8"))
-            else:
-                _msg = ("rbd create image failed: {}"
-                        .format(e.stderr.decode("UTF-8")))
-                logging.error(_msg)
-                event.fail(_msg)
-                event.set_results({
-                    "stderr": _msg,
-                    "code": "1"})
-                raise
+            _msg = ("rbd create image failed: {}"
+                    .format(e.stderr.decode("UTF-8")))
+            logging.error(_msg)
+            event.fail(_msg)
+            raise
 
     def rbd_map_image(self, event):
         """Create map and mount rbd block device.
