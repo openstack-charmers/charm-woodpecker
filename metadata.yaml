@@ -9,7 +9,7 @@ tags:
   - openstack
 series:
   - focal
-  - bionic
+  - jammy
 subordinate: false
 min-juju-version: 2.7.6
 resources:
