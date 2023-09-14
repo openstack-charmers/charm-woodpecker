@@ -25,6 +25,7 @@ from charmhelpers.fetch import snap
 import interface_ceph_client.ceph_client as ceph_client
 import interface_tls_certificates.ca_client as ca_client
 import interface_woodpecker_peers
+from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 
 import bench_tools
 
@@ -243,6 +244,14 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
         # snap retry is excessive
         snap.SNAP_NO_LOCK_RETRY_DELAY = 0.5
         snap.SNAP_NO_LOCK_RETRY_COUNT = 3
+
+        self._grafana_agent = COSAgentProvider(
+            self,
+            metrics_endpoints=[
+                {"path": "/metrics", "port": 8088},
+            ],
+            dashboard_dirs=["./src/grafana_dashboards"],
+        )
 
     def on_install(self, event):
         """Event handler on install.
@@ -994,7 +1003,9 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
                                                            percentile),
                                 latency
                             )
-            event.set_results({self.action_output_key: _result})
+            event.set_results(
+                {self.action_output_key: json.dumps(_result, indent=2)}
+            )
         except subprocess.CalledProcessError as e:
             _msg = ("fio failed: {}"
                     .format(e.stderr.decode("UTF-8")))

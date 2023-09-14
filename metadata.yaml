@@ -29,6 +29,9 @@ requires:
 provides:
   prometheus-target:
     interface: http
+  # https://charmhub.io/grafana-agent/libraries/cos_agent
+  cos-agent:
+    interface: cos_agent
 peers:
   peers:
     interface: woodpecker-peer
