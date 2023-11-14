@@ -81,7 +81,12 @@ fio:
   params:
     disk-devices:
       type: string
-      description: "If unset, use the charm default rbd device in the ceph pool or the block devices provided using test-devices storage. If set run fio, against the set disk. Space delimited list of devices."
+      description: |
+        If unset, use the charm default rbd device in the ceph pool or the block devices provided using test-devices storage.
+        If set run fio, against the set disk.
+        Space delimited list of devices.
+
+        WARNING: Be careful which devices are selected, as all data will be wiped from these devices during the test.
     pool-name:
       type: string
       description: "If using the default rbd device, name of ceph pool for test. Defaults to config option pool-name"
