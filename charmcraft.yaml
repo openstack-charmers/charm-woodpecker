@@ -4,7 +4,7 @@ parts:
   charm:
     after: [update-certificates]
     build-packages: [python3-markupsafe, git]
-    charm-python-packages: [setuptools < 58]
+    charm-python-packages: [setuptools]
 
   update-certificates:
     plugin: nil

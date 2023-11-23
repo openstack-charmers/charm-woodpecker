@@ -1,10 +1,10 @@
 # requirements
-Jinja2<=2.10.1
+Jinja2
 PyYAML<=5.2
 netaddr<=0.7.19
 prometheus_client
-git+https://github.com/juju/charm-helpers.git@87fc7ee5#egg=charmhelpers
+git+https://github.com/juju/charm-helpers.git@59f134b#egg=charmhelpers
 git+https://github.com/canonical/operator.git@0.8.0#egg=ops
-git+https://opendev.org/openstack/charm-ops-interface-ceph-client@cc10f29d4#egg=interface_ceph_client
+git+https://opendev.org/openstack/charm-ops-interface-ceph-client#egg=interface_ceph_client
 git+https://opendev.org/openstack/charm-ops-openstack#egg=ops_openstack
-git+https://opendev.org/openstack/charm-ops-interface-tls-certificates@2ec41b60#egg=ca_client
+git+https://opendev.org/openstack/charm-ops-interface-tls-certificates@f720af03a1

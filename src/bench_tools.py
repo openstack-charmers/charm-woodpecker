@@ -1,5 +1,6 @@
 import logging
 import subprocess
+import os.path
 
 import charmhelpers.core.host as ch_host
 
@@ -22,6 +23,12 @@ class BenchTools():
         return _output.decode("UTF-8")
 
     def rbd_remove_image(self, pool_name):
+        # first unmap the image otherwise removing the image will fail
+        _rbd_name = f"/dev/rbd/{ pool_name }/{ self.charm_instance.RBD_IMAGE }"
+        if os.path.exists(_rbd_name):
+            _cmd = ["rbd", "unmap", _rbd_name]
+            _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)
+
         _cmd = ["rbd", "remove", self.charm_instance.RBD_IMAGE,
                 "-p", pool_name, "-n", self.charm_instance.CEPH_CLIENT_NAME]
         _output = subprocess.check_output(_cmd, stderr=subprocess.PIPE)

@@ -940,8 +940,14 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             )
             while (datetime.datetime.now() < test_end):
                 _result = json.loads(_bench.fio(_fio_conf))
+                if event.params["operation"] in ["read", "randread"]:
+                    metrics = ["read"]
+                elif event.params["operation"] in ["write", "randwrite"]:
+                    metrics = ["write"]
+                else:
+                    metrics = ["read", "write"]
                 for job in _result["jobs"]:
-                    for metric in ('read', 'write'):
+                    for metric in metrics:
                         bandwidth = job[metric]["bw"]
                         iops = job[metric]["iops"]
                         # lat_ns is broadly slat + clat so

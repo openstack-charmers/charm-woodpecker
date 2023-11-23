@@ -8,8 +8,8 @@ tags:
   - ceph
   - openstack
 series:
+  - jammy
   - focal
-  - bionic
 subordinate: false
 min-juju-version: 2.7.6
 resources:
