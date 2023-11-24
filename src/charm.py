@@ -915,6 +915,15 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             event.params["ioengine"] = 'libaio'
             _fio_conf = str(self.DISK_FIO_CONF)
 
+            for device in event.params["disk_devices"]:
+                try:
+                    bench_tools.fill_zero(device)
+                except subprocess.CalledProcessError as e:
+                    msg = f"zeroing disk device {device} failed: {e.stderr}"
+                    event.fail(msg)
+                    event.set_results({"message": msg})
+                    return
+
         # Add action_parms to adapters
         self.set_action_params(event)
         # Individual test execution runtime
