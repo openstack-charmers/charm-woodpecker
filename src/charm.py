@@ -579,7 +579,7 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             logging.error(_msg)
             event.fail(_msg)
             event.set_results({
-                "stderr": _msg,
+                "message": _msg,
                 "code": "1"})
 
     def rbd_create_image(self, event):
@@ -660,7 +660,7 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             logging.error(_msg)
             event.fail(_msg)
             event.set_results({
-                "stderr": _msg,
+                "message": _msg,
                 "code": "1"})
             raise
 
@@ -688,7 +688,7 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             logging.error(_msg)
             event.fail(_msg)
             event.set_results({
-                "stderr": _msg,
+                "message": _msg,
                 "code": "1"})
             raise
 
@@ -810,7 +810,7 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             self.unit.status = ops.model.BlockedStatus(_msg)
             event.fail(_msg)
             event.set_results({
-                "stderr": _msg,
+                "message": _msg,
                 "code": "1"})
             return
 
@@ -819,7 +819,7 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
                     "leader.")
             event.fail(_msg)
             event.set_results({
-                "stderr": _msg,
+                "message": _msg,
                 "code": "1"})
             return
 
@@ -885,7 +885,7 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             logging.error(_msg)
             event.fail(_msg)
             event.set_results({
-                "stderr": _msg,
+                "message": _msg,
                 "code": "1"})
             raise
 
@@ -1023,7 +1023,7 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             logging.error(_msg)
             event.fail(_msg)
             event.set_results({
-                "stderr": _msg,
+                "message": _msg,
                 "code": "1"})
 
     def _defer_once(self, event):
