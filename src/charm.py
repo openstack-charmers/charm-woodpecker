@@ -253,6 +253,19 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             dashboard_dirs=["./src/grafana_dashboards"],
         )
 
+    def _snap_install(self):
+        snap_path = None
+        try:
+            snap_path = self.model.resources.fetch(self.SNAP_NAME)
+        except ops.model.ModelError:
+            logging.warning("No snap resource available")
+            return
+
+        snap.snap_install(str(snap_path), "--dangerous", "--classic")
+        # TODO: Remove devmode when snap is ready
+        # Set the snap has been installed
+        self._stored.swift_bench_snap_installed = True
+
     def on_install(self, event):
         """Event handler on install.
 
@@ -268,26 +281,8 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             "Installing packages and snaps")
         self.install_pkgs()
         # Perform install tasks
-        snap_path = None
         try:
-            snap_path = self.model.resources.fetch(self.SNAP_NAME)
-        except ops.model.ModelError:
-            self.unit.status = ops.model.BlockedStatus(
-                "Upload swift-bench snap resource to proceed")
-            logging.warning(
-                "No snap resource available, install blocked, deferring event:"
-                " {}".format(event.handle)
-            )
-            self._defer_once(event)
-
-            return
-        # Install the resource
-        try:
-            snap.snap_install(
-                str(snap_path), "--dangerous", "--classic"
-            )  # TODO: Remove devmode when snap is ready
-            # Set the snap has been installed
-            self._stored.swift_bench_snap_installed = True
+            self._snap_install()
         except snap.CouldNotAcquireLockException:
             self.unit.status = ops.model.BlockedStatus(
                 "Resource failed to install")
@@ -408,6 +403,13 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
         :returns: This method is called for its side effects
         :rtype: None
         """
+
+        if not self._stored.swift_bench_snap_installed:
+            try:
+                self._snap_install()
+            except snap.CouldNotAcquireLockException as exc:
+                logging.error("Failed to install swift bench snap", exc)
+
         ceph_storage = self.ceph_client.pools_available
         if ceph_storage:
             self.configs_for_rendering += [
@@ -923,6 +925,15 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             event.params["disk_devices"] = event.params["disk-devices"].split()
             event.params["ioengine"] = 'libaio'
             _fio_conf = str(self.DISK_FIO_CONF)
+
+            for device in event.params["disk_devices"]:
+                try:
+                    bench_tools.fill_zero(device)
+                except subprocess.CalledProcessError as e:
+                    msg = f"zeroing disk device {device} failed: {e.stderr}"
+                    event.fail(msg)
+                    event.set_results({"message": msg})
+                    return
 
         # Add action_parms to adapters
         self.set_action_params(event)

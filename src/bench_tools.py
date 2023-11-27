@@ -133,3 +133,12 @@ class BenchTools():
                 _cmd, stderr=subprocess.PIPE).decode("UTF-8"))
 
         return _output
+
+
+def fill_zero(device: str):
+    cmd = ["dd", "if=/dev/zero", f"of={device}", "bs=4M", "oflag=sync"]
+    try:
+        subprocess.run(cmd, text=True, capture_output=True, check=True)
+    except subprocess.CalledProcessError as e:
+        if "No space left on device" not in e.stderr:
+            raise
