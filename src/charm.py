@@ -244,6 +244,19 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
         snap.SNAP_NO_LOCK_RETRY_DELAY = 0.5
         snap.SNAP_NO_LOCK_RETRY_COUNT = 3
 
+    def _snap_install(self):
+        snap_path = None
+        try:
+            snap_path = self.model.resources.fetch(self.SNAP_NAME)
+        except ops.model.ModelError:
+            logging.warning("No snap resource available")
+            return
+
+        snap.snap_install(str(snap_path), "--dangerous", "--classic")
+        # TODO: Remove devmode when snap is ready
+        # Set the snap has been installed
+        self._stored.swift_bench_snap_installed = True
+
     def on_install(self, event):
         """Event handler on install.
 
@@ -259,26 +272,8 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             "Installing packages and snaps")
         self.install_pkgs()
         # Perform install tasks
-        snap_path = None
         try:
-            snap_path = self.model.resources.fetch(self.SNAP_NAME)
-        except ops.model.ModelError:
-            self.unit.status = ops.model.BlockedStatus(
-                "Upload swift-bench snap resource to proceed")
-            logging.warning(
-                "No snap resource available, install blocked, deferring event:"
-                " {}".format(event.handle)
-            )
-            self._defer_once(event)
-
-            return
-        # Install the resource
-        try:
-            snap.snap_install(
-                str(snap_path), "--dangerous", "--classic"
-            )  # TODO: Remove devmode when snap is ready
-            # Set the snap has been installed
-            self._stored.swift_bench_snap_installed = True
+            self._snap_install()
         except snap.CouldNotAcquireLockException:
             self.unit.status = ops.model.BlockedStatus(
                 "Resource failed to install")
@@ -399,6 +394,13 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
         :returns: This method is called for its side effects
         :rtype: None
         """
+
+        if not self._stored.swift_bench_snap_installed:
+            try:
+                self._snap_install()
+            except snap.CouldNotAcquireLockException as exc:
+                logging.error("Failed to install swift bench snap", exc)
+
         ceph_storage = self.ceph_client.pools_available
         if ceph_storage:
             self.configs_for_rendering += [

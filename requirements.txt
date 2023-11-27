@@ -1,7 +1,6 @@
 # requirements
 Jinja2
 PyYAML<=5.2
-netaddr<=0.7.19
 prometheus_client
 git+https://github.com/juju/charm-helpers.git@59f134b#egg=charmhelpers
 git+https://github.com/canonical/operator.git@0.8.0#egg=ops

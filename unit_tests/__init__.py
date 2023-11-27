@@ -13,7 +13,5 @@
 # limitations under the License.
 
 import sys
-import mock
 
-# Mock out secrets to make py35 happy.
-sys.modules['secrets'] = mock.MagicMock()
+sys.path.append('src')
