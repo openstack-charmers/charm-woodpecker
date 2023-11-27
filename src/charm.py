@@ -723,7 +723,7 @@ class WoodpeckerCharmBase(ops_openstack.core.OSBaseCharm):
             logging.error(_msg)
             event.fail(_msg)
             event.set_results({
-                "stderr": _msg,
+                "message": _msg,
                 "code": "1"})
             raise
 

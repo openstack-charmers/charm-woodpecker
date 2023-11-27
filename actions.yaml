@@ -46,8 +46,8 @@ rbd-bench:
       description: "Size of the RBD image."
     operation:
       type: string
-      default: rand
-      description: "Operation: write, rand, or seq"
+      default: readwrite
+      description: "Operation: read, write or readwrite"
 swift-bench:
   description: "Run the swift bench performance test"
   params:
